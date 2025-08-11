@@ -30,178 +30,210 @@ const Database = require('better-sqlite3');
 const crypto = require('crypto');
 const path = require('path');
 
-const PORT = process.env.PORT || 8787;
-const DB_FILE = process.env.DB_FILE || './leaderboard.sqlite';
-const API_TOKEN = process.env.API_TOKEN || null; // if set, require bearer for POST
-const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
-
 const app = express();
-app.use(express.json({ limit: '256kb' }));
-app.use(cors({ origin: CORS_ORIGIN }));
+const PORT = process.env.PORT || 8787;
+const API_TOKEN = process.env.API_TOKEN;
 
-// ---------- SQLite setup ----------
-const db = new Database(DB_FILE);
-db.pragma('journal_mode = WAL');
+// Middleware
+app.use(cors());
+app.use(express.json());
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Rate limiting
+const rateLimit = new Map();
+const RATE_LIMIT_WINDOW = 2000; // 2 seconds
+
+// Database setup
+const db = new Database('leaderboard.sqlite');
+
+// Auto-migrate schema
 db.exec(`
-CREATE TABLE IF NOT EXISTS scores (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  gameId TEXT NOT NULL,
-  name TEXT NOT NULL,
-  score INTEGER NOT NULL,
-  isTeam INTEGER NOT NULL DEFAULT 0,
-  mode INTEGER,
-  wave INTEGER,
-  timestamp INTEGER NOT NULL,
-  ip TEXT,
-  fingerprint TEXT, -- dedupe key
-  createdAt INTEGER NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_scores_game_score ON scores(gameId, score DESC);
-CREATE INDEX IF NOT EXISTS idx_scores_game_time ON scores(gameId, timestamp DESC);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_scores_unique ON scores(gameId, name, score, isTeam, mode, wave, timestamp);
+  CREATE TABLE IF NOT EXISTS scores (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    gameId TEXT NOT NULL,
+    name TEXT NOT NULL,
+    score INTEGER NOT NULL,
+    isTeam INTEGER DEFAULT 0,
+    mode INTEGER,
+    wave INTEGER,
+    timestamp INTEGER NOT NULL,
+    ip TEXT,
+    fingerprint TEXT NOT NULL,
+    createdAt INTEGER DEFAULT (strftime('%s', 'now'))
+  );
+  
+  CREATE INDEX IF NOT EXISTS idx_game_score ON scores(gameId, score DESC);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_dedupe ON scores(gameId, name, score, isTeam, mode, wave, timestamp);
 `);
 
-const insertScore = db.prepare(`
-  INSERT OR IGNORE INTO scores
-  (gameId, name, score, isTeam, mode, wave, timestamp, ip, fingerprint, createdAt)
-  VALUES (@gameId, @name, @score, @isTeam, @mode, @wave, @timestamp, @ip, @fingerprint, @createdAt)
-`);
+// Helper functions
+function createFingerprint(data) {
+  return crypto.createHash('md5').update(JSON.stringify(data)).digest('hex');
+}
 
-const selectTop = db.prepare(`
-  SELECT name, score, mode, wave, timestamp
-  FROM scores
-  WHERE gameId = @gameId
-    AND isTeam = @isTeam
-    AND (@mode IS NULL OR mode = @mode)
-    AND (@since IS NULL OR timestamp >= @since)
-  ORDER BY score DESC, timestamp DESC
-  LIMIT @limit
-`);
-
-// ---------- helpers ----------
-const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
-const now = () => Date.now();
-const ipOf = req => (req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress || '').trim();
-const hash = s => crypto.createHash('sha256').update(s).digest('hex');
-
-function requireAuthIfConfigured(req, res) {
-  if (!API_TOKEN) return true;
-  const h = req.headers['authorization'] || '';
-  const ok = h.startsWith('Bearer ') && h.slice(7) === API_TOKEN;
-  if (!ok) {
-    res.status(401).json({ ok: false, error: 'unauthorized' });
+function isRateLimited(ip) {
+  const now = Date.now();
+  const userRateLimit = rateLimit.get(ip);
+  
+  if (!userRateLimit) {
+    rateLimit.set(ip, now);
     return false;
   }
-  return true;
-}
-
-// super-minimal validation to avoid extra deps
-function isPlainObject(v) { return v && typeof v === 'object' && !Array.isArray(v); }
-function validateSubmit(body) {
-  if (!isPlainObject(body)) return 'body must be an object';
-  const { gameId, players, team, mode, wave, timestamp } = body;
-  if (!gameId || typeof gameId !== 'string') return 'gameId required';
-  if (!Array.isArray(players) || players.length === 0) return 'players[] required';
-  for (const p of players) {
-    if (!p || typeof p.name !== 'string') return 'player.name required';
-    if (typeof p.score !== 'number' || !Number.isFinite(p.score)) return 'player.score must be number';
+  
+  if (now - userRateLimit < RATE_LIMIT_WINDOW) {
+    return true;
   }
-  if (timestamp != null && !Number.isFinite(timestamp)) return 'timestamp must be number if provided';
-  if (mode != null && !Number.isInteger(mode)) return 'mode must be integer if provided';
-  if (wave != null && !Number.isInteger(wave)) return 'wave must be integer if provided';
-  if (team != null && typeof team !== 'number') return 'team must be number if provided';
-  return null;
+  
+  rateLimit.set(ip, now);
+  return false;
 }
 
-// in-memory rate-limit (best-effort)
-const lastByIp = new Map();
-function rateLimit(req, res, windowMs = 2000) {
-  const ip = ipOf(req);
-  const t = now();
-  const last = lastByIp.get(ip) || 0;
-  if (t - last < windowMs) {
-    res.status(429).json({ ok: false, error: 'rate_limited' });
-    return false;
+// Auth middleware
+function requireAuth(req, res, next) {
+  if (!API_TOKEN) return next();
+  
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Bearer token required' });
   }
-  lastByIp.set(ip, t);
-  return true;
+  
+  const token = authHeader.substring(7);
+  if (token !== API_TOKEN) {
+    return res.status(403).json({ error: 'Invalid token' });
+  }
+  
+  next();
 }
 
-// ---------- static front-end ----------
-const STATIC_DIR = process.env.STATIC_DIR || path.join(__dirname, '');
-app.use(express.static(STATIC_DIR));
-// If you place your HTML game at public/index.html, it will be served at '/'
-app.get('/', (req, res) => res.sendFile(path.join(STATIC_DIR, 'index.html')));
-
-// ---------- routes ----------
+// Routes
 app.get('/api/health', (req, res) => {
-  res.json({ ok: true, time: new Date().toISOString() });
+  res.json({ ok: true, time: Date.now() });
 });
 
-app.post('/api/scores', (req, res) => {
-  if (!requireAuthIfConfigured(req, res)) return;
-  if (!rateLimit(req, res)) return;
-
-  const err = validateSubmit(req.body);
-  if (err) return res.status(400).json({ ok: false, error: err });
-
-  const { gameId } = req.body;
-  const players = req.body.players.map(p => ({
-    name: String(p.name || '匿名').slice(0, 40).trim() || '匿名',
-    score: Math.round(Number(p.score) || 0)
-  }));
-  const mode = Number.isInteger(req.body.mode) ? req.body.mode : null;
-  const wave = Number.isInteger(req.body.wave) ? req.body.wave : null;
-  const timestamp = Number.isFinite(req.body.timestamp) ? req.body.timestamp : now();
-  const ip = ipOf(req);
-
-  // derive team name (optional)
-  const teamScore = Number.isFinite(req.body.team) ? Math.round(req.body.team) : null;
-  const teamName = players.map(p => p.name).filter(Boolean).slice(0, 2).join(' & ').slice(0, 60) || 'TEAM';
-
-  const createdAt = now();
-
-  let inserted = 0;
-  const tx = db.transaction(() => {
-    for (const p of players) {
-      const fp = hash(`${gameId}\n${p.name}\n${p.score}\n0\n${mode}\n${wave}\n${timestamp}`);
-      inserted += insertScore.run({ gameId, name: p.name, score: p.score, isTeam: 0, mode, wave, timestamp, ip, fingerprint: fp, createdAt }).changes;
+app.post('/api/scores', requireAuth, (req, res) => {
+  try {
+    const { gameId, players, team, mode, wave, timestamp } = req.body;
+    const ip = req.ip || req.connection.remoteAddress;
+    
+    if (!gameId || !players || !Array.isArray(players) || players.length === 0) {
+      return res.status(400).json({ error: 'Invalid request body' });
     }
-    if (teamScore != null) {
-      const fpTeam = hash(`${gameId}\n${teamName}\n${teamScore}\n1\n${mode}\n${wave}\n${timestamp}`);
-      inserted += insertScore.run({ gameId, name: teamName, score: teamScore, isTeam: 1, mode, wave, timestamp, ip, fingerprint: fpTeam, createdAt }).changes;
+    
+    if (isRateLimited(ip)) {
+      return res.status(429).json({ error: 'Rate limited' });
     }
-  });
-
-  try { tx(); } catch (e) {
-    console.error('insert failed', e);
-    return res.status(500).json({ ok: false, error: 'db_insert_failed' });
+    
+    const now = timestamp || Date.now();
+    const inserted = [];
+    
+    // Insert individual player scores
+    for (const player of players) {
+      if (!player.name || typeof player.score !== 'number') continue;
+      
+      const fingerprint = createFingerprint({
+        gameId, name: player.name, score: player.score, isTeam: 0,
+        mode, wave, timestamp: now, ip
+      });
+      
+      try {
+        const stmt = db.prepare(`
+          INSERT INTO scores (gameId, name, score, isTeam, mode, wave, timestamp, ip, fingerprint)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        
+        const result = stmt.run(gameId, player.name, player.score, 0, mode, wave, now, ip, fingerprint);
+        inserted.push({ name: player.name, score: player.score, id: result.lastInsertRowid });
+      } catch (err) {
+        if (!err.message.includes('UNIQUE constraint failed')) {
+          throw err;
+        }
+      }
+    }
+    
+    // Insert team score if provided
+    if (team && typeof team === 'number') {
+      const teamFingerprint = createFingerprint({
+        gameId, name: 'TEAM', score: team, isTeam: 1,
+        mode, wave, timestamp: now, ip
+      });
+      
+      try {
+        const stmt = db.prepare(`
+          INSERT INTO scores (gameId, name, score, isTeam, mode, wave, timestamp, ip, fingerprint)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        
+        const result = stmt.run(gameId, 'TEAM', team, 1, mode, wave, now, ip, teamFingerprint);
+        inserted.push({ name: 'TEAM', score: team, id: result.lastInsertRowid });
+      } catch (err) {
+        if (!err.message.includes('UNIQUE constraint failed')) {
+          throw err;
+        }
+      }
+    }
+    
+    res.json({ ok: true, inserted });
+  } catch (error) {
+    console.error('Error submitting scores:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
-
-  res.json({ ok: true, inserted });
 });
 
 app.get('/api/leaderboard', (req, res) => {
-  const gameId = req.query.gameId;
-  if (!gameId) return res.status(400).json({ ok: false, error: 'gameId required' });
-  const limit = clamp(parseInt(req.query.limit || '10', 10) || 10, 1, 100);
-  const type = (req.query.type || 'player').toLowerCase();
-  const isTeam = type === 'team' ? 1 : 0;
-  const mode = req.query.mode != null ? parseInt(req.query.mode, 10) : null;
-  const sinceDays = req.query.sinceDays != null ? parseInt(req.query.sinceDays, 10) : null;
-  const since = sinceDays != null ? (now() - Math.max(0, sinceDays) * 24 * 60 * 60 * 1000) : null;
-
   try {
-    const rows = selectTop.all({ gameId, isTeam, mode, since, limit });
-    res.json({ ok: true, leaderboard: rows });
-  } catch (e) {
-    console.error('select failed', e);
-    res.status(500).json({ ok: false, error: 'db_select_failed' });
+    const { gameId, limit = 10, type = 'player', mode, sinceDays } = req.query;
+    
+    if (!gameId) {
+      return res.status(400).json({ error: 'gameId required' });
+    }
+    
+    let query = `
+      SELECT name, score, mode, wave, timestamp, isTeam
+      FROM scores 
+      WHERE gameId = ? AND isTeam = ?
+    `;
+    
+    const params = [gameId, type === 'team' ? 1 : 0];
+    
+    if (mode !== undefined && mode !== '') {
+      query += ' AND mode = ?';
+      params.push(parseInt(mode));
+    }
+    
+    if (sinceDays) {
+      const sinceTimestamp = Date.now() - (parseInt(sinceDays) * 24 * 60 * 60 * 1000);
+      query += ' AND timestamp >= ?';
+      params.push(sinceTimestamp);
+    }
+    
+    query += ' ORDER BY score DESC LIMIT ?';
+    params.push(parseInt(limit));
+    
+    const stmt = db.prepare(query);
+    const leaderboard = stmt.all(...params);
+    
+    res.json({ 
+      ok: true, 
+      leaderboard: leaderboard.map(row => ({
+        name: row.name,
+        score: row.score,
+        mode: row.mode,
+        wave: row.wave,
+        timestamp: row.timestamp
+      }))
+    });
+  } catch (error) {
+    console.error('Error fetching leaderboard:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-app.use((req, res) => res.status(404).json({ ok: false, error: 'not_found' }));
+// Serve index.html at root
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
+// Start server
 app.listen(PORT, () => {
   console.log(`SQLite Leaderboard API listening on http://localhost:${PORT}`);
 });

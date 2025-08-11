@@ -321,18 +321,31 @@
     }
   }
 
-  function reset(){ bullets.length=0; ebullets.length=0; fx.length=0; enemies.length=0; scoreP=0; bossAlive=false; pollPads();
-    const p1pad=pads[0]?0:null, p2pad=pads[1]?1:null;
-    players=[ new Player(cfg.worldW/2-80,cfg.worldH/2,P1_KEYS,"#60a5fa",p1pad), new Player(cfg.worldW/2+80,cfg.worldH/2,P2_KEYS,"#f59e0b",p2pad) ];
-    players[0].name = (localStorage.getItem('name1')||'P1');
-    players[1].name = (localStorage.getItem('name2')||'P2');
-    document.getElementById('name1').value=players[0].name;
-    document.getElementById('name2').value=players[1].name;
-    if(wavesOn){ wave=0; nextWave(); } else { spawnEnemies(cfg.enemy.base); }
-    gamePaused=false; bannerOn=true; setTimeout(()=>bannerOn=false,1200);
-    // 自动滚动并聚焦到画布，确保键盘输入有效
-    setTimeout(()=>{ canvas.scrollIntoView({behavior:'smooth', block:'center'}); try{canvas.focus();}catch(_){ } },0);
-  }
+  function reset(){
+  bullets.length=0; ebullets.length=0; fx.length=0; enemies.length=0; scoreP=0; bossAlive=false; pollPads();
+  const p1pad=pads[0]?0:null, p2pad=pads[1]?1:null;
+  players=[ new Player(cfg.worldW/2-80,cfg.worldH/2,P1_KEYS,"#60a5fa",p1pad),
+            new Player(cfg.worldW/2+80,cfg.worldH/2,P2_KEYS,"#f59e0b",p2pad) ];
+  players[0].name = (localStorage.getItem('name1')||'P1');
+  players[1].name = (localStorage.getItem('name2')||'P2');
+  document.getElementById('name1').value=players[0].name;
+  document.getElementById('name2').value=players[1].name;
+
+  if(wavesOn){ wave=0; nextWave(); } else { spawnEnemies(cfg.enemy.base); }
+
+  // ⬇️ Center camera instantly so players are visible right away
+  const cx=(players[0].x+players[1].x)/2, cy=(players[0].y+players[1].y)/2;
+  camera.x = Math.max(0, Math.min(cx - canvas.width/2, cfg.worldW - canvas.width));
+  camera.y = Math.max(0, Math.min(cy - canvas.height/2, cfg.worldH - canvas.height));
+  cam1.x = Math.max(0, Math.min(players[0].x - canvas.width/4, cfg.worldW - canvas.width/2));
+  cam1.y = Math.max(0, Math.min(players[0].y - canvas.height/2, cfg.worldH - canvas.height));
+  cam2.x = Math.max(0, Math.min(players[1].x - canvas.width/4, cfg.worldW - canvas.width/2));
+  cam2.y = Math.max(0, Math.min(players[1].y - canvas.height/2, cfg.worldH - canvas.height));
+
+  gamePaused=false; bannerOn=true; setTimeout(()=>bannerOn=false,1200);
+  setTimeout(()=>{ canvas.scrollIntoView({behavior:'smooth', block:'center'}); try{canvas.focus();}catch(_){ } },0);
+}
+
 
   function togglePause(){ gamePaused=!gamePaused; }
   function toggleWaves(){ wavesOn=!wavesOn; reset(); }
