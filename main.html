@@ -168,13 +168,13 @@
   ];
   let heroIdx=0;
 
-  // 可选后端（默认关闭）—— 配置你的 API 即可启用
+  // ======= 后端（已启用） =======
   const backend={
-    enabled:false, // 改成 true 开启上传/拉榜
-    submitUrl:"https://example.com/api/scores", // POST 提交成绩
-    leaderboardUrl:"https://example.com/api/leaderboard?gameId=browser-hero-demo", // GET 拉榜
+    enabled:true, // 开启上传/拉榜
+    submitUrl:"http://localhost:8787/api/scores", // POST 提交成绩
+    leaderboardUrl:"http://localhost:8787/api/leaderboard?gameId=browser-hero-demo", // GET 拉榜
     leaderboardLimit:10,
-    token:null, // 如需要鉴权，放 Bearer Token
+    token:null, // 如果服务端设置了 API_TOKEN，这里填同样的值
     gameId:"browser-hero-demo"
   };
 
@@ -312,7 +312,7 @@
     if(objMode===0){ // 单点
       const c=inRadius(cfg.point,cfg.point.r*0.9); if(c>0) scoreP+=18*dt; awardInside(cfg.point,cfg.point.r*0.9,cfg.score.capturePerSec,dt); for(const e of enemies){ if(Math.hypot(e.x-cfg.point.x,e.y-cfg.point.y)<cfg.point.r*0.9) scoreP-=10*dt; } clampScore();
     } else if(objMode===1){ // 移动点
-      const t=performance.now()/1000; cfg.point.x=cfg.worldW/2+Math.cos(t*0.3)*600; cfg.point.y=cfg.worldW/2? cfg.worldH/2+Math.sin(t*0.25)*300 : cfg.worldH/2; const c=inRadius(cfg.point,cfg.point.r*0.9); if(c>0) scoreP+=16*dt; awardInside(cfg.point,cfg.point.r*0.9,cfg.score.movingPerSec,dt); for(const e of enemies){ if(Math.hypot(e.x-cfg.point.x,e.y-cfg.point.y)<cfg.point.r*0.9) scoreP-=9*dt; } clampScore();
+      const t=performance.now()/1000; cfg.point.x=cfg.worldW/2+Math.cos(t*0.3)*600; cfg.point.y=cfg.worldH/2+Math.sin(t*0.25)*300; const c=inRadius(cfg.point,cfg.point.r*0.9); if(c>0) scoreP+=16*dt; awardInside(cfg.point,cfg.point.r*0.9,cfg.score.movingPerSec,dt); for(const e of enemies){ if(Math.hypot(e.x-cfg.point.x,e.y-cfg.point.y)<cfg.point.r*0.9) scoreP-=9*dt; } clampScore();
     } else if(objMode===2){ // 双点
       const a=inRadius(cfg.point,cfg.point.r*0.9); const b=inRadius(cfg.pointB,cfg.pointB.r*0.9); let rate=0; if(a>0&&b>0) rate=26; else if(a>0||b>0) rate=12; for(const e of enemies){ if(Math.hypot(e.x-cfg.point.x,e.y-cfg.point.y)<cfg.point.r*0.9 || Math.hypot(e.x-cfg.pointB.x,e.y-cfg.pointB.y)<cfg.pointB.r*0.9) rate-=10; } scoreP+=rate*dt; awardInside(cfg.point,cfg.point.r*0.9,cfg.score.dualPerSec,dt); awardInside(cfg.pointB,cfg.pointB.r*0.9,cfg.score.dualPerSec,dt); clampScore();
     } else { // 推进载具
@@ -388,7 +388,7 @@
       ],
       team: teamScore
     };
-    if(!backend.enabled){ alert('后端未启用。请在源码中把 backend.enabled 设为 true 并配置 submitUrl。'); return; }
+    if(!backend.enabled){ alert('后端未启用。'); return; }
     fetch(backend.submitUrl,{
       method:'POST',
       headers:{'Content-Type':'application/json', ...(backend.token? {Authorization:'Bearer '+backend.token}:{})},
@@ -464,7 +464,7 @@
     draw();
   }
 
-  function drawGrid(cam){ ctx.fillStyle="#0b1220"; ctx.fillRect(cam.x, cam.y, canvas.width, canvas.height); const grid=60; ctx.strokeStyle="#0f1b2e"; ctx.lineWidth=1; for(let x=0;x<cfg.worldW;x+=grid){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,cfg.worldH); ctx.stroke(); } for(let y=0;y<cfg.worldH;y+=grid){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(cfg.worldH,y); ctx.stroke(); } }
+  function drawGrid(cam){ ctx.fillStyle="#0b1220"; ctx.fillRect(cam.x, cam.y, canvas.width, canvas.height); const grid=60; ctx.strokeStyle="#0f1b2e"; ctx.lineWidth=1; for(let x=0;x<cfg.worldW;x+=grid){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,cfg.worldH); ctx.stroke(); } for(let y=0;y<cfg.worldH;y+=grid){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(cfg.worldW,y); ctx.stroke(); } }
   function drawObjective(cam){ if(objMode===0 || objMode===1){ ctx.fillStyle="rgba(94,234,212,0.1)"; ctx.beginPath(); ctx.arc(cfg.point.x-cam.x, cfg.point.y-cam.y, cfg.point.r, 0, Math.PI*2); ctx.fill(); ctx.strokeStyle="#5eead4"; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(cfg.point.x-cam.x, cfg.point.y-cam.y, cfg.point.r, 0, Math.PI*2); ctx.stroke(); } else if(objMode===2){ const A=cfg.point, B=cfg.pointB; ctx.strokeStyle="#5eead4"; ctx.lineWidth=2; ctx.fillStyle="rgba(94,234,212,0.1)"; [A,B].forEach(pt=>{ ctx.beginPath(); ctx.arc(pt.x-cam.x, pt.y-cam.y, pt.r, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(pt.x-cam.x, pt.y-cam.y, pt.r, 0, Math.PI*2); ctx.stroke(); }); } else { const {pathA,pathB,r}=cfg.payload; const cart=payloadPos(); ctx.strokeStyle="#64748b"; ctx.beginPath(); ctx.moveTo(pathA.x-cam.x,pathA.y-cam.y); ctx.lineTo(pathB.x-cam.x,pathB.y-cam.y); ctx.stroke(); ctx.fillStyle="rgba(94,234,212,0.15)"; ctx.beginPath(); ctx.arc(cart.x-cam.x, cart.y-cam.y, r, 0, Math.PI*2); ctx.fill(); ctx.fillStyle="#5eead4"; ctx.fillRect(cart.x-cam.x-12, cart.y-cam.y-8, 24,16); }
   }
   function drawScene(cam){ cameraActive=cam; drawGrid(cam); drawObjective(cam); for(const o of obstacles){ ctx.lineWidth=2; if(o.destructible){ const hpPct=(o.hp/o.maxHp); ctx.fillStyle=`rgba(148,163,184,${0.3+0.5*hpPct})`; ctx.beginPath(); ctx.arc(o.x-cam.x,o.y-cam.y,o.r,0,Math.PI*2); ctx.fill(); ctx.strokeStyle="#f59e0b"; ctx.stroke(); } else { ctx.strokeStyle="#64748b"; ctx.beginPath(); ctx.arc(o.x-cam.x,o.y-cam.y,o.r,0,Math.PI*2); ctx.stroke(); } } ctx.strokeStyle="#a78bfa"; for(const s of spawns){ ctx.beginPath(); ctx.moveTo(s.x-8-cam.x,s.y-cam.y); ctx.lineTo(s.x+8-cam.x,s.y-cam.y); ctx.moveTo(s.x-cam.x,s.y-8-cam.y); ctx.lineTo(s.x-cam.x,s.y+8-cam.y); ctx.stroke(); } enemies.forEach(e=>e.draw()); bullets.forEach(b=>b.draw()); ebullets.forEach(b=>b.draw()); players.forEach(p=>p.draw()); fx.forEach(f=>f.draw&&f.draw()); }
