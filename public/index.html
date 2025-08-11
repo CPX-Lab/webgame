@@ -196,7 +196,12 @@
         function setupEventListeners() {
             // Keyboard events
             document.addEventListener('keydown', (e) => {
-                const key = e.key.toLowerCase();
+                let key = e.key.toLowerCase();
+                
+                // Handle special keys
+                if (key === ';') key = 'semicolon';
+                if (key === 'shift') key = 'shift';
+                
                 gameState.keys[key] = true;
                 
                 if (key === ' ') {
@@ -230,7 +235,12 @@
             });
             
             document.addEventListener('keyup', (e) => {
-                const key = e.key.toLowerCase();
+                let key = e.key.toLowerCase();
+                
+                // Handle special keys
+                if (key === ';') key = 'semicolon';
+                if (key === 'shift') key = 'shift';
+                
                 gameState.keys[key] = false;
             });
 
@@ -470,10 +480,21 @@
 
         function updatePlayers(dt) {
             gameState.players.forEach((player, index) => {
-                // Input handling
-                const controls = index === 0 ? 
-                    { up: 'w', down: 's', left: 'a', right: 'd', shoot: 'f', dash: 'shift', shield: 'e', ult: 'q', reload: 'r' } :
-                    { up: 'i', down: 'k', left: 'j', right: 'l', shoot: 'h', dash: 'o', shield: 'u', ult: 'p', reload: ';' };
+                // Input handling - separate controls for each player
+                let controls;
+                if (index === 0) {
+                    // Player 1 controls
+                    controls = { 
+                        up: 'w', down: 's', left: 'a', right: 'd', 
+                        shoot: 'f', dash: 'shift', shield: 'e', ult: 'q', reload: 'r' 
+                    };
+                } else {
+                    // Player 2 controls
+                    controls = { 
+                        up: 'i', down: 'k', left: 'j', right: 'l', 
+                        shoot: 'h', dash: 'o', shield: 'u', ult: 'p', reload: 'semicolon' 
+                    };
+                }
                 
                 // Movement
                 let vx = 0, vy = 0;
@@ -923,6 +944,12 @@
                 ctx.beginPath();
                 ctx.arc(player.x, player.y, player.size, 0, Math.PI * 2);
                 ctx.stroke();
+                
+                // Player number indicator
+                ctx.fillStyle = '#ffffff';
+                ctx.font = '12px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText((index + 1).toString(), player.x, player.y + 4);
                 
                 // Shield effect
                 if (player.shield) {
