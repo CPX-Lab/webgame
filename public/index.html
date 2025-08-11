@@ -108,7 +108,7 @@
         
         <div class="card center-card">
             <div style="margin-bottom: 5px;">
-                <button class="button" onclick="startGame()">开始/重开</button>
+                <button class="button" onclick="console.log('Button clicked'); startGame();">开始/重开</button>
                 <button class="button" onclick="togglePause()">暂停(P)</button>
             </div>
             <div style="font-size: 10px; color: #888;">
@@ -154,7 +154,7 @@
 
     <canvas id="canvas" width="960" height="540" tabindex="0"></canvas>
     
-    <div class="radar" id="radar"></div>
+    <canvas class="radar" id="radar" width="120" height="120"></canvas>
     
     <div class="status" id="status">
         准备开始游戏 - 按空格键或点击"开始/重开"
@@ -264,6 +264,7 @@
         }
 
         function startGame() {
+            console.log('startGame called');
             gameState.running = true;
             gameState.paused = false;
             gameState.wave = 1;
@@ -279,19 +280,25 @@
             const centerX = gameState.worldSize.w / 2;
             const centerY = gameState.worldSize.h / 2;
             
+            console.log('Creating players at center:', centerX, centerY);
+            
             gameState.players.push({
                 id: 1, x: centerX - 50, y: centerY, vx: 0, vy: 0,
                 hp: 100, maxHp: 100, ult: 0, maxUlt: 100, ammo: 30, maxAmmo: 30,
                 score: 0, reloading: false, shield: false, dashCooldown: 0,
-                color: '#4CAF50', size: 15, gunAngle: 0, lastShot: 0
+                color: '#4CAF50', size: 20, gunAngle: 0, lastShot: 0
             });
             
             gameState.players.push({
                 id: 2, x: centerX + 50, y: centerY, vx: 0, vy: 0,
                 hp: 100, maxHp: 100, ult: 0, maxUlt: 100, ammo: 30, maxAmmo: 30,
                 score: 0, reloading: false, shield: false, dashCooldown: 0,
-                color: '#2196F3', size: 15, gunAngle: 0, lastShot: 0
+                color: '#2196F3', size: 20, gunAngle: 0, lastShot: 0
             });
+            
+            console.log('Players spawned:', gameState.players);
+            console.log('World size:', gameState.worldSize);
+            console.log('Canvas size:', canvas.width, canvas.height);
             
             // Center camera on players
             centerCamera();
@@ -315,8 +322,18 @@
             const avgX = gameState.players.reduce((sum, p) => sum + p.x, 0) / gameState.players.length;
             const avgY = gameState.players.reduce((sum, p) => sum + p.y, 0) / gameState.players.length;
             
-            gameState.camera.x = avgX - canvas.width / 2;
-            gameState.camera.y = avgY - canvas.height / 2;
+            // Smooth camera following with interpolation
+            const targetX = avgX - canvas.width / 2;
+            const targetY = avgY - canvas.height / 2;
+            
+            // Add smooth interpolation
+            const cameraSpeed = 0.1;
+            gameState.camera.x += (targetX - gameState.camera.x) * cameraSpeed;
+            gameState.camera.y += (targetY - gameState.camera.y) * cameraSpeed;
+            
+            // Ensure camera doesn't go out of world bounds
+            gameState.camera.x = Math.max(0, Math.min(gameState.worldSize.w - canvas.width, gameState.camera.x));
+            gameState.camera.y = Math.max(0, Math.min(gameState.worldSize.h - canvas.height, gameState.camera.y));
         }
 
         function spawnWave() {
@@ -485,7 +502,7 @@
                 player.y = Math.max(player.size, Math.min(gameState.worldSize.h - player.size, player.y));
                 
                 // Shooting
-                if (gameState.keys[controls.shoot] && player.ammo > 0 && !player.reloading && currentTime - player.lastShot > 150) {
+                if (gameState.keys[controls.shoot] && player.ammo > 0 && !player.reloading && Date.now() - player.lastShot > 150) {
                     shoot(player, index);
                 }
                 
@@ -532,7 +549,7 @@
             if (player.ammo <= 0) return;
             
             player.ammo--;
-            player.lastShot = currentTime;
+            player.lastShot = Date.now();
             
             // Find nearest enemy for aim
             let targetAngle = player.gunAngle;
@@ -622,8 +639,8 @@
                     enemy.y += enemy.vy * dt;
                     
                     // Enemy shooting
-                    if (currentTime - enemy.lastShot > 1000) {
-                        enemy.lastShot = currentTime;
+                    if (Date.now() - enemy.lastShot > 1000) {
+                        enemy.lastShot = Date.now();
                         
                         const bulletSpeed = 200;
                         gameState.bullets.push({
@@ -772,6 +789,18 @@
             // Draw players
             drawPlayers();
             
+            // Debug: Draw a test circle at screen center
+            ctx.fillStyle = '#ff0000';
+            ctx.beginPath();
+            ctx.arc(canvas.width/2, canvas.height/2, 30, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Debug info (only log occasionally)
+            if (gameState.running && Math.random() < 0.01) {
+                console.log('Camera:', gameState.camera);
+                console.log('Players:', gameState.players.length);
+            }
+            
             // Restore context
             ctx.restore();
         }
@@ -880,36 +909,44 @@
         }
 
         function drawPlayers() {
-            gameState.players.forEach(player => {
-                // Player body
+            gameState.players.forEach((player, index) => {
+                
+                // Player body with border
                 ctx.fillStyle = player.color;
                 ctx.beginPath();
                 ctx.arc(player.x, player.y, player.size, 0, Math.PI * 2);
                 ctx.fill();
                 
+                // White border for visibility
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(player.x, player.y, player.size, 0, Math.PI * 2);
+                ctx.stroke();
+                
                 // Shield effect
                 if (player.shield) {
                     ctx.strokeStyle = '#00ffff';
-                    ctx.lineWidth = 2;
+                    ctx.lineWidth = 3;
                     ctx.beginPath();
-                    ctx.arc(player.x, player.y, player.size + 5, 0, Math.PI * 2);
+                    ctx.arc(player.x, player.y, player.size + 8, 0, Math.PI * 2);
                     ctx.stroke();
                 }
                 
-                // Gun
+                // Gun (larger and more visible)
                 ctx.fillStyle = '#333';
-                ctx.fillRect(player.x - 2, player.y - player.size - 8, 4, 8);
+                ctx.fillRect(player.x - 3, player.y - player.size - 10, 6, 12);
                 
                 // Health bar
                 const barWidth = player.size * 2;
-                const barHeight = 4;
+                const barHeight = 6;
                 const healthPercent = player.hp / player.maxHp;
                 
                 ctx.fillStyle = '#333';
-                ctx.fillRect(player.x - barWidth/2, player.y - player.size - 15, barWidth, barHeight);
+                ctx.fillRect(player.x - barWidth/2, player.y - player.size - 20, barWidth, barHeight);
                 
                 ctx.fillStyle = '#4CAF50';
-                ctx.fillRect(player.x - barWidth/2, player.y - player.size - 15, barWidth * healthPercent, barHeight);
+                ctx.fillRect(player.x - barWidth/2, player.y - player.size - 20, barWidth * healthPercent, barHeight);
             });
         }
 
