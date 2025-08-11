@@ -28,6 +28,7 @@ const express = require('express');
 const cors = require('cors');
 const Database = require('better-sqlite3');
 const crypto = require('crypto');
+const path = require('path');
 
 const PORT = process.env.PORT || 8787;
 const DB_FILE = process.env.DB_FILE || './leaderboard.sqlite';
@@ -125,6 +126,12 @@ function rateLimit(req, res, windowMs = 2000) {
   lastByIp.set(ip, t);
   return true;
 }
+
+// ---------- static front-end ----------
+const STATIC_DIR = process.env.STATIC_DIR || path.join(__dirname, '');
+app.use(express.static(STATIC_DIR));
+// If you place your HTML game at public/index.html, it will be served at '/'
+app.get('/', (req, res) => res.sendFile(path.join(STATIC_DIR, 'index.html')));
 
 // ---------- routes ----------
 app.get('/api/health', (req, res) => {
