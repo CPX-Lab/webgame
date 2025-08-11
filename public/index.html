@@ -177,7 +177,8 @@
             players: [], enemies: [], bullets: [], effects: [], obstacles: [],
             objectives: [], camera: { x: 0, y: 0 }, worldSize: { w: 2600, h: 1500 },
             keys: {}, gamepads: {}, lastTime: 0, waveMode: false, pvpMode: false,
-            splitScreen: false, hardLock: false, lockStrategy: 0, currentObjective: 0
+            splitScreen: false, hardLock: false, lockStrategy: 0, currentObjective: 0,
+            playerAssignments: { player1: null, player2: null } // Track which player controls which character
         };
 
         // Initialize
@@ -479,22 +480,13 @@
         }
 
         function updatePlayers(dt) {
-            gameState.players.forEach((player, index) => {
-                // Input handling - separate controls for each player
-                let controls;
-                if (index === 0) {
-                    // Player 1 controls
-                    controls = { 
-                        up: 'w', down: 's', left: 'a', right: 'd', 
-                        shoot: 'f', dash: 'shift', shield: 'e', ult: 'q', reload: 'r' 
-                    };
-                } else {
-                    // Player 2 controls
-                    controls = { 
-                        up: 'i', down: 'k', left: 'j', right: 'l', 
-                        shoot: 'h', dash: 'o', shield: 'u', ult: 'p', reload: 'semicolon' 
-                    };
-                }
+            // Update Player 1 (index 0) - only responds to WASD controls
+            const player1 = gameState.players[0];
+            if (player1) {
+                const controls = { 
+                    up: 'w', down: 's', left: 'a', right: 'd', 
+                    shoot: 'f', dash: 'shift', shield: 'e', ult: 'q', reload: 'r' 
+                };
                 
                 // Movement
                 let vx = 0, vy = 0;
@@ -511,59 +503,136 @@
                     vy *= 0.707;
                 }
                 
-                player.vx = vx;
-                player.vy = vy;
+                player1.vx = vx;
+                player1.vy = vy;
                 
                 // Update position
-                player.x += player.vx * dt;
-                player.y += player.vy * dt;
+                player1.x += player1.vx * dt;
+                player1.y += player1.vy * dt;
                 
                 // World bounds
-                player.x = Math.max(player.size, Math.min(gameState.worldSize.w - player.size, player.x));
-                player.y = Math.max(player.size, Math.min(gameState.worldSize.h - player.size, player.y));
+                player1.x = Math.max(player1.size, Math.min(gameState.worldSize.w - player1.size, player1.x));
+                player1.y = Math.max(player1.size, Math.min(gameState.worldSize.h - player1.size, player1.y));
                 
                 // Shooting
-                if (gameState.keys[controls.shoot] && player.ammo > 0 && !player.reloading && Date.now() - player.lastShot > 150) {
-                    shoot(player, index);
+                if (gameState.keys[controls.shoot] && player1.ammo > 0 && !player1.reloading && Date.now() - player1.lastShot > 150) {
+                    shoot(player1, 0);
                 }
                 
                 // Reloading
-                if (gameState.keys[controls.reload] && !player.reloading) {
-                    player.reloading = true;
+                if (gameState.keys[controls.reload] && !player1.reloading) {
+                    player1.reloading = true;
                     setTimeout(() => {
-                        player.ammo = player.maxAmmo;
-                        player.reloading = false;
+                        player1.ammo = player1.maxAmmo;
+                        player1.reloading = false;
                     }, 1000);
                 }
                 
                 // Shield
                 if (gameState.keys[controls.shield]) {
-                    player.shield = true;
+                    player1.shield = true;
                 } else {
-                    player.shield = false;
+                    player1.shield = false;
                 }
                 
                 // Dash
-                if (gameState.keys[controls.dash] && player.dashCooldown <= 0) {
-                    player.x += player.vx * dt * 3;
-                    player.y += player.vy * dt * 3;
-                    player.dashCooldown = 2;
+                if (gameState.keys[controls.dash] && player1.dashCooldown <= 0) {
+                    player1.x += player1.vx * dt * 3;
+                    player1.y += player1.vy * dt * 3;
+                    player1.dashCooldown = 2;
                 }
                 
-                if (player.dashCooldown > 0) {
-                    player.dashCooldown -= dt;
+                if (player1.dashCooldown > 0) {
+                    player1.dashCooldown -= dt;
                 }
                 
                 // Ult charge
-                if (player.ult < player.maxUlt) {
-                    player.ult += 10 * dt;
+                if (player1.ult < player1.maxUlt) {
+                    player1.ult += 10 * dt;
                 }
                 
                 // Ult usage
-                if (gameState.keys[controls.ult] && player.ult >= player.maxUlt) {
-                    useUlt(player);
+                if (gameState.keys[controls.ult] && player1.ult >= player1.maxUlt) {
+                    useUlt(player1);
                 }
-            });
+            }
+            
+            // Update Player 2 (index 1) - only responds to IJKL controls
+            const player2 = gameState.players[1];
+            if (player2) {
+                const controls = { 
+                    up: 'i', down: 'k', left: 'j', right: 'l', 
+                    shoot: 'h', dash: 'o', shield: 'u', ult: 'p', reload: 'semicolon' 
+                };
+                
+                // Movement
+                let vx = 0, vy = 0;
+                const speed = 200;
+                
+                if (gameState.keys[controls.up]) vy -= speed;
+                if (gameState.keys[controls.down]) vy += speed;
+                if (gameState.keys[controls.left]) vx -= speed;
+                if (gameState.keys[controls.right]) vx += speed;
+                
+                // Normalize diagonal movement
+                if (vx !== 0 && vy !== 0) {
+                    vx *= 0.707;
+                    vy *= 0.707;
+                }
+                
+                player2.vx = vx;
+                player2.vy = vy;
+                
+                // Update position
+                player2.x += player2.vx * dt;
+                player2.y += player2.vy * dt;
+                
+                // World bounds
+                player2.x = Math.max(player2.size, Math.min(gameState.worldSize.w - player2.size, player2.x));
+                player2.y = Math.max(player2.size, Math.min(gameState.worldSize.h - player2.size, player2.y));
+                
+                // Shooting
+                if (gameState.keys[controls.shoot] && player2.ammo > 0 && !player2.reloading && Date.now() - player2.lastShot > 150) {
+                    shoot(player2, 1);
+                }
+                
+                // Reloading
+                if (gameState.keys[controls.reload] && !player2.reloading) {
+                    player2.reloading = true;
+                    setTimeout(() => {
+                        player2.ammo = player2.maxAmmo;
+                        player2.reloading = false;
+                    }, 1000);
+                }
+                
+                // Shield
+                if (gameState.keys[controls.shield]) {
+                    player2.shield = true;
+                } else {
+                    player2.shield = false;
+                }
+                
+                // Dash
+                if (gameState.keys[controls.dash] && player2.dashCooldown <= 0) {
+                    player2.x += player2.vx * dt * 3;
+                    player2.y += player2.vy * dt * 3;
+                    player2.dashCooldown = 2;
+                }
+                
+                if (player2.dashCooldown > 0) {
+                    player2.dashCooldown -= dt;
+                }
+                
+                // Ult charge
+                if (player2.ult < player2.maxUlt) {
+                    player2.ult += 10 * dt;
+                }
+                
+                // Ult usage
+                if (gameState.keys[controls.ult] && player2.ult >= player2.maxUlt) {
+                    useUlt(player2);
+                }
+            }
         }
 
         function shoot(player, playerIndex) {
