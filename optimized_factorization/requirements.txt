@@ -1,0 +1,10 @@
+# Ultra-Optimized Factorization Algorithm Dependencies
+# Core scientific computing
+numpy>=1.21.0
+matplotlib>=3.5.0
+
+# Symbolic mathematics and number theory
+sympy>=1.10.0
+
+# Optional: For enhanced performance (if available)
+# gmpy2>=2.1.0  # Uncomment if you want to use GMP for faster integer operations
