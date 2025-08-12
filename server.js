@@ -29,6 +29,8 @@ const cors = require('cors');
 const Database = require('better-sqlite3');
 const crypto = require('crypto');
 const path = require('path');
+const http = require('http');
+const WebSocket = require('ws');
 
 const app = express();
 const PORT = process.env.PORT || 8787;
@@ -233,7 +235,265 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// Create HTTP server
+const server = http.createServer(app);
+
+// Create WebSocket server
+const wss = new WebSocket.Server({ server });
+
+// Multiplayer game state
+const multiplayerState = {
+  rooms: new Map(),
+  players: new Map()
+};
+
+// WebSocket connection handling
+wss.on('connection', (ws, req) => {
+  const playerId = crypto.randomBytes(8).toString('hex');
+  const ip = req.socket.remoteAddress;
+  
+  console.log(`Player connected: ${playerId} from ${ip}`);
+  
+  // Store player connection
+  multiplayerState.players.set(playerId, {
+    ws,
+    id: playerId,
+    ip,
+    roomId: null,
+    playerIndex: null,
+    lastUpdate: Date.now()
+  });
+  
+  // Send player their ID
+  ws.send(JSON.stringify({
+    type: 'playerId',
+    playerId: playerId
+  }));
+  
+  ws.on('message', (message) => {
+    try {
+      const data = JSON.parse(message);
+      handleWebSocketMessage(playerId, data);
+    } catch (error) {
+      console.error('WebSocket message error:', error);
+    }
+  });
+  
+  ws.on('close', () => {
+    handlePlayerDisconnect(playerId);
+  });
+  
+  ws.on('error', (error) => {
+    console.error(`WebSocket error for player ${playerId}:`, error);
+    handlePlayerDisconnect(playerId);
+  });
+});
+
+function handleWebSocketMessage(playerId, data) {
+  const player = multiplayerState.players.get(playerId);
+  if (!player) return;
+  
+  switch (data.type) {
+    case 'joinRoom':
+      handleJoinRoom(playerId, data.roomId);
+      break;
+    case 'createRoom':
+      handleCreateRoom(playerId);
+      break;
+    case 'playerInput':
+      handlePlayerInput(playerId, data.input);
+      break;
+    case 'gameState':
+      handleGameState(playerId, data.state);
+      break;
+    case 'requestGameStart':
+      handleGameStartRequest(playerId, data.roomId);
+      break;
+    case 'playerReady':
+      handlePlayerReady(playerId, data.ready);
+      break;
+  }
+}
+
+function handleJoinRoom(playerId, roomId) {
+  const player = multiplayerState.players.get(playerId);
+  if (!player) return;
+  
+  let room = multiplayerState.rooms.get(roomId);
+  if (!room) {
+    room = {
+      id: roomId,
+      players: new Map(),
+      gameState: null,
+      lastUpdate: Date.now(),
+      readyPlayers: new Set(),
+      gameStarted: false
+    };
+    multiplayerState.rooms.set(roomId, room);
+  }
+  
+  // Assign player to room
+  player.roomId = roomId;
+  player.playerIndex = room.players.size;
+  room.players.set(playerId, player);
+  
+  // Notify all players in room
+  broadcastToRoom(roomId, {
+    type: 'playerJoined',
+    playerId: playerId,
+    playerIndex: player.playerIndex,
+    totalPlayers: room.players.size
+  });
+  
+  console.log(`Player ${playerId} joined room ${roomId} as player ${player.playerIndex}`);
+}
+
+function handleCreateRoom(playerId) {
+  const roomId = crypto.randomBytes(4).toString('hex');
+  handleJoinRoom(playerId, roomId);
+}
+
+function handlePlayerInput(playerId, input) {
+  const player = multiplayerState.players.get(playerId);
+  if (!player || !player.roomId) return;
+  
+  const room = multiplayerState.rooms.get(player.roomId);
+  if (!room) return;
+  
+  // Broadcast input to other players in room
+  broadcastToRoom(player.roomId, {
+    type: 'playerInput',
+    playerId: playerId,
+    playerIndex: player.playerIndex,
+    input: input
+  }, playerId); // Exclude sender
+}
+
+function handleGameState(playerId, state) {
+  const player = multiplayerState.players.get(playerId);
+  if (!player || !player.roomId) return;
+  
+  const room = multiplayerState.rooms.get(player.roomId);
+  if (!room) return;
+  
+  // Update room game state
+  room.gameState = state;
+  room.lastUpdate = Date.now();
+  
+  // Broadcast to other players
+  broadcastToRoom(player.roomId, {
+    type: 'gameState',
+    playerId: playerId,
+    state: state
+  }, playerId);
+}
+
+function handleGameStartRequest(playerId, roomId) {
+  const player = multiplayerState.players.get(playerId);
+  if (!player) return;
+  
+  const room = multiplayerState.rooms.get(roomId);
+  if (!room) return;
+  
+  // Check if all players are ready
+  if (room.readyPlayers.size < room.players.size) {
+    // Notify the requesting player that not everyone is ready
+    player.ws.send(JSON.stringify({
+      type: 'gameStartDenied',
+      reason: 'Not all players are ready'
+    }));
+    return;
+  }
+  
+  // Mark room as started
+  room.gameStarted = true;
+  
+  // Notify all players in the room about the game start request
+  broadcastToRoom(roomId, {
+    type: 'gameStartRequest',
+    playerId: playerId,
+    playerIndex: player.playerIndex
+  });
+  
+  // Start a countdown timer for synchronized start
+  setTimeout(() => {
+    // Start the game for all players in the room
+    broadcastToRoom(roomId, {
+      type: 'gameStart'
+    });
+    
+    console.log(`Game started for room ${roomId} with ${room.players.size} players`);
+  }, 3000); // 3 second countdown
+}
+
+function handlePlayerReady(playerId, ready) {
+  const player = multiplayerState.players.get(playerId);
+  if (!player || !player.roomId) return;
+  
+  const room = multiplayerState.rooms.get(player.roomId);
+  if (!room) return;
+  
+  if (ready) {
+    room.readyPlayers.add(playerId);
+  } else {
+    room.readyPlayers.delete(playerId);
+  }
+  
+  // Broadcast ready status to all players in room
+  broadcastToRoom(player.roomId, {
+    type: 'playerReadyStatus',
+    playerId: playerId,
+    playerIndex: player.playerIndex,
+    ready: ready,
+    readyCount: room.readyPlayers.size,
+    totalPlayers: room.players.size
+  });
+  
+  console.log(`Player ${playerId} ${ready ? 'ready' : 'not ready'} (${room.readyPlayers.size}/${room.players.size})`);
+}
+
+function handlePlayerDisconnect(playerId) {
+  const player = multiplayerState.players.get(playerId);
+  if (!player) return;
+  
+  if (player.roomId) {
+    const room = multiplayerState.rooms.get(player.roomId);
+    if (room) {
+      room.players.delete(playerId);
+      
+      // Notify other players
+      broadcastToRoom(player.roomId, {
+        type: 'playerLeft',
+        playerId: playerId,
+        playerIndex: player.playerIndex
+      });
+      
+      // Clean up empty rooms
+      if (room.players.size === 0) {
+        multiplayerState.rooms.delete(player.roomId);
+        console.log(`Room ${player.roomId} deleted (empty)`);
+      }
+    }
+  }
+  
+  multiplayerState.players.delete(playerId);
+  console.log(`Player ${playerId} disconnected`);
+}
+
+function broadcastToRoom(roomId, message, excludePlayerId = null) {
+  const room = multiplayerState.rooms.get(roomId);
+  if (!room) return;
+  
+  const messageStr = JSON.stringify(message);
+  room.players.forEach((player, playerId) => {
+    if (playerId !== excludePlayerId && player.ws.readyState === WebSocket.OPEN) {
+      player.ws.send(messageStr);
+    }
+  });
+}
+
 // Start server
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`SQLite Leaderboard API listening on http://localhost:${PORT}`);
+  console.log(`WebSocket server ready on ws://localhost:${PORT}`);
 });

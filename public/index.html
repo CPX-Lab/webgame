@@ -45,6 +45,11 @@
             background: #1a1a1a; border: 1px solid #333; border-radius: 8px;
             padding: 15px; z-index: 50;
         }
+        #multiplayerPanel { 
+            position: fixed; left: 10px; top: 350px; width: 200px;
+            background: #1a1a1a; border: 1px solid #333; border-radius: 8px;
+            padding: 15px; z-index: 50;
+        }
         .panel h3 { margin-bottom: 10px; color: #4CAF50; }
         .input-group { margin-bottom: 10px; }
         .input-group label { display: block; margin-bottom: 3px; font-size: 11px; }
@@ -91,6 +96,19 @@
             position: fixed; bottom: 10px; left: 10px; right: 10px;
             background: rgba(0,0,0,0.8); padding: 5px 10px; border-radius: 4px;
             font-size: 11px; z-index: 50;
+        }
+        .ability-item { 
+            display: flex; justify-content: space-between; margin-bottom: 5px;
+            font-size: 11px;
+        }
+        .ability-label { color: #888; }
+        .ability-status { color: #4CAF50; font-weight: bold; }
+        .ability-status.reloading { color: #f44336; }
+        .ability-status.ready { color: #4CAF50; }
+        .ability-status.cooldown { color: #ff9800; }
+        @keyframes flash {
+            0%, 100% { background-color: #4CAF50; }
+            50% { background-color: #ffeb3b; color: #000; }
         }
     </style>
 </head>
@@ -152,6 +170,48 @@
         <div id="leaderboardContent"></div>
     </div>
 
+    <div class="panel" id="abilityPanel" style="left: 10px; top: 120px; width: 200px;">
+        <h3>能力状态</h3>
+        <div id="abilityContent">
+            <div class="ability-item">
+                <span class="ability-label">护盾:</span>
+                <span class="ability-status" id="shieldStatus">关闭</span>
+            </div>
+            <div class="ability-item">
+                <span class="ability-label">冲刺:</span>
+                <span class="ability-status" id="dashStatus">就绪</span>
+            </div>
+            <div class="ability-item">
+                <span class="ability-label">大招:</span>
+                <span class="ability-status" id="ultStatus">0%</span>
+            </div>
+            <div class="ability-item">
+                <span class="ability-label">弹药:</span>
+                <span class="ability-status" id="ammoStatus">30/30</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="panel" id="multiplayerPanel" style="left: 10px; top: 350px; width: 200px;">
+        <h3>多人游戏</h3>
+        <div id="multiplayerContent">
+            <div class="input-group">
+                <label>房间ID:</label>
+                <input type="text" id="roomIdInput" placeholder="输入房间ID">
+            </div>
+            <button class="button" onclick="createRoom()">创建房间</button>
+            <button class="button" onclick="joinRoom(document.getElementById('roomIdInput').value)">加入房间</button>
+            <button class="button" id="readyButton" onclick="toggleReady()" style="display: none; background: #4CAF50; color: white; margin-top: 10px; padding: 8px 15px; font-weight: bold; border: 2px solid #45a049;">准备</button>
+            <button class="button" onclick="showReadyButton()" style="background: #666; margin-top: 5px;">显示准备按钮</button>
+            <button class="button" onclick="toggleReady()" style="background: #ff9800; color: white; margin-top: 10px; padding: 8px 15px; font-weight: bold; border: 2px solid #f57c00;">准备 (测试)</button>
+            <div id="connectionStatus" style="margin-top: 10px; font-size: 10px; color: #888;">
+                未连接
+            </div>
+            <div id="roomStatus" style="margin-top: 5px; font-size: 10px; color: #888;">
+            </div>
+        </div>
+    </div>
+
     <canvas id="canvas" width="960" height="540" tabindex="0"></canvas>
     
     <canvas class="radar" id="radar" width="120" height="120"></canvas>
@@ -171,6 +231,20 @@
             gameId: "browser-hero-demo"
         };
 
+        // Multiplayer configuration
+        const multiplayer = {
+            enabled: true,
+            wsUrl: `ws://${window.location.host}`,
+            playerId: null,
+            roomId: null,
+            playerIndex: null,
+            ws: null,
+            connected: false,
+            inputQueue: [],
+            ready: false,
+            roomPlayers: new Map()
+        };
+
         // Game state
         let canvas, ctx, gameState = {
             running: false, paused: false, wave: 1, score: 0, teamScore: 0,
@@ -188,11 +262,231 @@
             
             loadFromStorage();
             setupEventListeners();
+            setupMultiplayer();
             gameLoop();
             
             // Auto-focus canvas
             canvas.focus();
+            
+            // Check if ready button should be shown (for debugging)
+            setTimeout(() => {
+                const readyButton = document.getElementById('readyButton');
+                console.log('On load - Ready button element:', readyButton);
+                if (readyButton) {
+                    console.log('Ready button display style:', readyButton.style.display);
+                }
+            }, 1000);
         };
+
+        function setupMultiplayer() {
+            if (!multiplayer.enabled) return;
+            
+            try {
+                multiplayer.ws = new WebSocket(multiplayer.wsUrl);
+                
+                multiplayer.ws.onopen = () => {
+                    console.log('WebSocket connected');
+                    multiplayer.connected = true;
+                    updateStatus('已连接到服务器 - 创建或加入房间');
+                    updateConnectionStatus('已连接', '#4CAF50');
+                };
+                
+                multiplayer.ws.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        handleWebSocketMessage(data);
+                    } catch (error) {
+                        console.error('WebSocket message error:', error);
+                    }
+                };
+                
+                multiplayer.ws.onclose = () => {
+                    console.log('WebSocket disconnected');
+                    multiplayer.connected = false;
+                    updateStatus('连接断开 - 重新连接中...');
+                    updateConnectionStatus('连接断开', '#f44336');
+                    setTimeout(setupMultiplayer, 3000);
+                };
+                
+                multiplayer.ws.onerror = (error) => {
+                    console.error('WebSocket error:', error);
+                    multiplayer.connected = false;
+                };
+            } catch (error) {
+                console.error('Failed to setup WebSocket:', error);
+                multiplayer.enabled = false;
+            }
+        }
+
+        function handleWebSocketMessage(data) {
+            switch (data.type) {
+                case 'playerId':
+                    multiplayer.playerId = data.playerId;
+                    console.log('Assigned player ID:', data.playerId);
+                    break;
+                    
+                case 'playerJoined':
+                    console.log(`Player ${data.playerId} joined as player ${data.playerIndex}`);
+                    updateStatus(`玩家 ${data.playerIndex + 1} 已加入 (共 ${data.totalPlayers} 人)`);
+                    updateRoomStatus();
+                    showReadyButton();
+                    break;
+                    
+                case 'playerLeft':
+                    console.log(`Player ${data.playerId} left`);
+                    updateStatus(`玩家 ${data.playerIndex + 1} 已离开`);
+                    break;
+                    
+                case 'playerInput':
+                    handleRemotePlayerInput(data.playerId, data.playerIndex, data.input);
+                    break;
+                    
+                case 'gameState':
+                    handleRemoteGameState(data.playerId, data.state);
+                    break;
+                    
+                case 'gameStart':
+                    console.log('Game starting synchronously');
+                    startGameInternal();
+                    break;
+                    
+                case 'gameStartRequest':
+                    // Another player requested game start
+                    console.log('Another player requested game start');
+                    startCountdown();
+                    break;
+                    
+                case 'gameStartDenied':
+                    console.log('Game start denied:', data.reason);
+                    updateStatus('游戏开始被拒绝: ' + data.reason);
+                    break;
+                    
+                case 'playerReadyStatus':
+                    console.log(`Player ${data.playerId} ready: ${data.ready} (${data.readyCount}/${data.totalPlayers})`);
+                    updateStatus(`准备状态: ${data.readyCount}/${data.totalPlayers} 玩家已准备`);
+                    break;
+            }
+        }
+
+        function startCountdown() {
+            let countdown = 3;
+            updateStatus(`游戏将在 ${countdown} 秒后开始...`);
+            
+            const countdownInterval = setInterval(() => {
+                countdown--;
+                if (countdown > 0) {
+                    updateStatus(`游戏将在 ${countdown} 秒后开始...`);
+                    showBanner(`${countdown}`);
+                } else {
+                    clearInterval(countdownInterval);
+                    updateStatus('游戏开始！');
+                    showBanner('游戏开始！');
+                }
+            }, 1000);
+        }
+
+        function handleRemotePlayerInput(playerId, playerIndex, input) {
+            // Handle input from other players
+            if (playerIndex < gameState.players.length) {
+                const player = gameState.players[playerIndex];
+                if (player) {
+                    // Apply remote player input
+                    player.vx = input.vx || 0;
+                    player.vy = input.vy || 0;
+                    player.shield = input.shield || false;
+                    // Add more input handling as needed
+                }
+            }
+        }
+
+        function handleRemoteGameState(playerId, state) {
+            // Handle game state updates from other players
+            // This could be used for synchronization
+        }
+
+        function sendPlayerInput(input) {
+            if (multiplayer.connected && multiplayer.ws) {
+                multiplayer.ws.send(JSON.stringify({
+                    type: 'playerInput',
+                    input: input
+                }));
+            }
+        }
+
+        function createRoom() {
+            if (multiplayer.connected && multiplayer.ws) {
+                multiplayer.ws.send(JSON.stringify({
+                    type: 'createRoom'
+                }));
+                updateStatus('创建房间中...');
+                showReadyButton(); // Show ready button when creating room
+            }
+        }
+
+        function joinRoom(roomId) {
+            if (multiplayer.connected && multiplayer.ws) {
+                multiplayer.roomId = roomId;
+                multiplayer.ws.send(JSON.stringify({
+                    type: 'joinRoom',
+                    roomId: roomId
+                }));
+                updateStatus('加入房间中...');
+                showReadyButton(); // Show ready button when joining room
+            }
+        }
+
+        function updateConnectionStatus(status, color) {
+            const statusElement = document.getElementById('connectionStatus');
+            if (statusElement) {
+                statusElement.textContent = status;
+                statusElement.style.color = color;
+            }
+        }
+
+        function showReadyButton() {
+            const readyButton = document.getElementById('readyButton');
+            console.log('showReadyButton called, button element:', readyButton);
+            if (readyButton) {
+                readyButton.style.display = 'block';
+                readyButton.style.visibility = 'visible';
+                readyButton.style.opacity = '1';
+                console.log('Ready button should now be visible');
+                console.log('Button display style:', readyButton.style.display);
+                console.log('Button visibility:', readyButton.style.visibility);
+                
+                // Add a visual indicator
+                updateStatus('准备按钮已显示 - 请点击准备');
+                
+                // Flash the button to make it more visible
+                readyButton.style.animation = 'flash 1s ease-in-out';
+            } else {
+                console.error('Ready button element not found!');
+            }
+        }
+
+        function toggleReady() {
+            multiplayer.ready = !multiplayer.ready;
+            const readyButton = document.getElementById('readyButton');
+            if (readyButton) {
+                readyButton.textContent = multiplayer.ready ? '取消准备' : '准备';
+                readyButton.style.background = multiplayer.ready ? '#4CAF50' : '#333';
+            }
+            
+            if (multiplayer.connected && multiplayer.ws) {
+                multiplayer.ws.send(JSON.stringify({
+                    type: 'playerReady',
+                    ready: multiplayer.ready
+                }));
+            }
+        }
+
+        function updateRoomStatus() {
+            const roomStatus = document.getElementById('roomStatus');
+            if (roomStatus && multiplayer.roomId) {
+                const playerCount = multiplayer.roomPlayers.size;
+                roomStatus.textContent = `房间: ${multiplayer.roomId} (${playerCount} 人)`;
+            }
+        }
 
         function setupEventListeners() {
             // Keyboard events
@@ -276,6 +570,22 @@
 
         function startGame() {
             console.log('startGame called');
+            
+            // If in multiplayer, request synchronized start
+            if (multiplayer.connected && multiplayer.roomId) {
+                multiplayer.ws.send(JSON.stringify({
+                    type: 'requestGameStart',
+                    roomId: multiplayer.roomId
+                }));
+                updateStatus('等待其他玩家准备...');
+                return;
+            }
+            
+            // Single player or host starts immediately
+            startGameInternal();
+        }
+
+        function startGameInternal() {
             gameState.running = true;
             gameState.paused = false;
             gameState.wave = 1;
@@ -506,6 +816,17 @@
                 player1.vx = vx;
                 player1.vy = vy;
                 
+                // Send input to multiplayer
+                if (multiplayer.connected && multiplayer.playerIndex === 0) {
+                    sendPlayerInput({
+                        vx: vx,
+                        vy: vy,
+                        shield: player1.shield,
+                        shooting: gameState.keys[controls.shoot],
+                        dashing: gameState.keys[controls.dash]
+                    });
+                }
+                
                 // Update position
                 player1.x += player1.vx * dt;
                 player1.y += player1.vy * dt;
@@ -582,6 +903,17 @@
                 
                 player2.vx = vx;
                 player2.vy = vy;
+                
+                // Send input to multiplayer
+                if (multiplayer.connected && multiplayer.playerIndex === 1) {
+                    sendPlayerInput({
+                        vx: vx,
+                        vy: vy,
+                        shield: player2.shield,
+                        shooting: gameState.keys[controls.shoot],
+                        dashing: gameState.keys[controls.dash]
+                    });
+                }
                 
                 // Update position
                 player2.x += player2.vx * dt;
@@ -1043,7 +1375,44 @@
                 
                 ctx.fillStyle = '#4CAF50';
                 ctx.fillRect(player.x - barWidth/2, player.y - player.size - 20, barWidth * healthPercent, barHeight);
+                
+                // Ability indicators
+                drawAbilityIndicators(player, index);
             });
+        }
+        
+        function drawAbilityIndicators(player, playerIndex) {
+            const yOffset = player.y - player.size - 35;
+            const iconSize = 8;
+            const spacing = 12;
+            
+            // Shield indicator
+            ctx.fillStyle = player.shield ? '#00ffff' : '#666';
+            ctx.fillRect(player.x - spacing * 2, yOffset, iconSize, iconSize);
+            
+            // Dash cooldown indicator
+            const dashColor = player.dashCooldown > 0 ? '#ff4444' : '#44ff44';
+            ctx.fillStyle = dashColor;
+            ctx.fillRect(player.x - spacing, yOffset, iconSize, iconSize);
+            
+            // Ultimate indicator
+            const ultColor = player.ult >= player.maxUlt ? '#ffaa00' : '#666';
+            ctx.fillStyle = ultColor;
+            ctx.fillRect(player.x, yOffset, iconSize, iconSize);
+            
+            // Ammo indicator
+            const ammoColor = player.reloading ? '#ff4444' : '#4444ff';
+            ctx.fillStyle = ammoColor;
+            ctx.fillRect(player.x + spacing, yOffset, iconSize, iconSize);
+            
+            // Ability labels
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '8px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('S', player.x - spacing * 2 + iconSize/2, yOffset + iconSize + 8);
+            ctx.fillText('D', player.x - spacing + iconSize/2, yOffset + iconSize + 8);
+            ctx.fillText('U', player.x + iconSize/2, yOffset + iconSize + 8);
+            ctx.fillText('A', player.x + spacing + iconSize/2, yOffset + iconSize + 8);
         }
 
         function updateHUD() {
@@ -1057,6 +1426,40 @@
                 ultBar.style.width = (player.ult / player.maxUlt * 100) + '%';
                 ammoBar.style.width = (player.ammo / player.maxAmmo * 100) + '%';
             });
+            
+            // Update ability panel for the first player (or current player in multiplayer)
+            if (gameState.players.length > 0) {
+                const player = gameState.players[0]; // For now, show first player's abilities
+                updateAbilityPanel(player);
+            }
+        }
+        
+        function updateAbilityPanel(player) {
+            // Shield status
+            const shieldStatus = document.getElementById('shieldStatus');
+            shieldStatus.textContent = player.shield ? '激活' : '关闭';
+            shieldStatus.className = 'ability-status ' + (player.shield ? 'ready' : '');
+            
+            // Dash status
+            const dashStatus = document.getElementById('dashStatus');
+            if (player.dashCooldown > 0) {
+                dashStatus.textContent = Math.ceil(player.dashCooldown) + 's';
+                dashStatus.className = 'ability-status cooldown';
+            } else {
+                dashStatus.textContent = '就绪';
+                dashStatus.className = 'ability-status ready';
+            }
+            
+            // Ultimate status
+            const ultStatus = document.getElementById('ultStatus');
+            const ultPercent = Math.round((player.ult / player.maxUlt) * 100);
+            ultStatus.textContent = ultPercent + '%';
+            ultStatus.className = 'ability-status ' + (ultPercent >= 100 ? 'ready' : '');
+            
+            // Ammo status
+            const ammoStatus = document.getElementById('ammoStatus');
+            ammoStatus.textContent = player.ammo + '/' + player.maxAmmo;
+            ammoStatus.className = 'ability-status ' + (player.reloading ? 'reloading' : 'ready');
         }
 
         function updateRadar() {
