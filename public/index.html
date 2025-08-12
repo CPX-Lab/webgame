@@ -242,7 +242,9 @@
             connected: false,
             inputQueue: [],
             ready: false,
-            roomPlayers: new Map()
+            roomPlayers: new Map(),
+            lastInputSent: 0,
+            inputSendInterval: 50 // Send input every 50ms (20 times per second)
         };
 
         // Game state
@@ -328,6 +330,13 @@
                 case 'playerJoined':
                     console.log(`Player ${data.playerId} joined as player ${data.playerIndex}`);
                     updateStatus(`玩家 ${data.playerIndex + 1} 已加入 (共 ${data.totalPlayers} 人)`);
+                    
+                    // Assign this player to their character
+                    if (data.playerId === multiplayer.playerId) {
+                        multiplayer.playerIndex = data.playerIndex;
+                        console.log(`Assigned to player ${data.playerIndex + 1}`);
+                    }
+                    
                     updateRoomStatus();
                     showReadyButton();
                     break;
@@ -394,18 +403,85 @@
                     player.vx = input.vx || 0;
                     player.vy = input.vy || 0;
                     player.shield = input.shield || false;
-                    // Add more input handling as needed
+                    
+                    // Apply movement based on velocity
+                    const dt = 1/60; // Assume 60 FPS for remote updates
+                    player.x += player.vx * dt;
+                    player.y += player.vy * dt;
+                    
+                    // World bounds
+                    player.x = Math.max(player.size, Math.min(gameState.worldSize.w - player.size, player.x));
+                    player.y = Math.max(player.size, Math.min(gameState.worldSize.h - player.size, player.y));
+                    
+                    // Handle shooting
+                    if (input.shooting && player.ammo > 0 && !player.reloading && Date.now() - player.lastShot > 150) {
+                        shoot(player, playerIndex);
+                    }
+                    
+                    // Handle dashing
+                    if (input.dashing && player.dashCooldown <= 0) {
+                        player.x += player.vx * dt * 3;
+                        player.y += player.vy * dt * 3;
+                        player.dashCooldown = 2;
+                    }
                 }
             }
         }
 
         function handleRemoteGameState(playerId, state) {
             // Handle game state updates from other players
-            // This could be used for synchronization
+            if (state && state.players) {
+                // Update enemy positions and states
+                if (state.enemies) {
+                    gameState.enemies = state.enemies;
+                }
+                
+                // Update bullets from other players
+                if (state.bullets) {
+                    // Only update bullets that aren't from this player
+                    const remoteBullets = state.bullets.filter(bullet => 
+                        bullet.playerId !== multiplayer.playerIndex + 1
+                    );
+                    gameState.bullets = gameState.bullets.filter(bullet => 
+                        bullet.playerId === multiplayer.playerIndex + 1
+                    ).concat(remoteBullets);
+                }
+                
+                // Update effects
+                if (state.effects) {
+                    gameState.effects = state.effects;
+                }
+            }
+        }
+
+        function sendGameState() {
+            if (multiplayer.connected && multiplayer.ws) {
+                const stateToSend = {
+                    players: gameState.players.map(p => ({
+                        x: p.x, y: p.y, hp: p.hp, score: p.score,
+                        shield: p.shield, ult: p.ult, ammo: p.ammo
+                    })),
+                    enemies: gameState.enemies,
+                    bullets: gameState.bullets,
+                    effects: gameState.effects,
+                    wave: gameState.wave,
+                    score: gameState.score,
+                    timestamp: Date.now()
+                };
+                
+                multiplayer.ws.send(JSON.stringify({
+                    type: 'gameState',
+                    state: stateToSend
+                }));
+            }
         }
 
         function sendPlayerInput(input) {
-            if (multiplayer.connected && multiplayer.ws) {
+            const now = Date.now();
+            if (multiplayer.connected && multiplayer.ws && 
+                now - multiplayer.lastInputSent >= multiplayer.inputSendInterval) {
+                
+                multiplayer.lastInputSent = now;
                 multiplayer.ws.send(JSON.stringify({
                     type: 'playerInput',
                     input: input
@@ -787,6 +863,11 @@
             gameState.teamScore = gameState.players.reduce((sum, p) => sum + p.score, 0);
             document.getElementById('currentScore').textContent = gameState.teamScore;
             document.getElementById('teamScore').textContent = gameState.teamScore;
+            
+            // Send game state to other players (less frequently than input)
+            if (multiplayer.connected && Date.now() % 200 < 16) { // ~5 times per second
+                sendGameState();
+            }
         }
 
         function updatePlayers(dt) {
@@ -823,7 +904,10 @@
                         vy: vy,
                         shield: player1.shield,
                         shooting: gameState.keys[controls.shoot],
-                        dashing: gameState.keys[controls.dash]
+                        dashing: gameState.keys[controls.dash],
+                        ult: gameState.keys[controls.ult],
+                        reload: gameState.keys[controls.reload],
+                        timestamp: Date.now()
                     });
                 }
                 
@@ -911,7 +995,10 @@
                         vy: vy,
                         shield: player2.shield,
                         shooting: gameState.keys[controls.shoot],
-                        dashing: gameState.keys[controls.dash]
+                        dashing: gameState.keys[controls.dash],
+                        ult: gameState.keys[controls.ult],
+                        reload: gameState.keys[controls.reload],
+                        timestamp: Date.now()
                     });
                 }
                 
@@ -1345,6 +1432,15 @@
                 ctx.beginPath();
                 ctx.arc(player.x, player.y, player.size, 0, Math.PI * 2);
                 ctx.stroke();
+                
+                // Highlight current player with thicker border
+                if (index === multiplayer.playerIndex) {
+                    ctx.strokeStyle = '#ffff00';
+                    ctx.lineWidth = 4;
+                    ctx.beginPath();
+                    ctx.arc(player.x, player.y, player.size + 2, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
                 
                 // Player number indicator
                 ctx.fillStyle = '#ffffff';
