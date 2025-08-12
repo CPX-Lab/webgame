@@ -202,8 +202,6 @@
             <button class="button" onclick="createRoom()">创建房间</button>
             <button class="button" onclick="joinRoom(document.getElementById('roomIdInput').value)">加入房间</button>
             <button class="button" id="readyButton" onclick="toggleReady()" style="display: none; background: #4CAF50; color: white; margin-top: 10px; padding: 8px 15px; font-weight: bold; border: 2px solid #45a049;">准备</button>
-            <button class="button" onclick="showReadyButton()" style="background: #666; margin-top: 5px;">显示准备按钮</button>
-            <button class="button" onclick="toggleReady()" style="background: #ff9800; color: white; margin-top: 10px; padding: 8px 15px; font-weight: bold; border: 2px solid #f57c00;">准备 (测试)</button>
             <div id="connectionStatus" style="margin-top: 10px; font-size: 10px; color: #888;">
                 未连接
             </div>
@@ -338,7 +336,11 @@
                     }
                     
                     updateRoomStatus();
-                    showReadyButton();
+                    // Show ready button when joined room
+                    const readyButton = document.getElementById('readyButton');
+                    if (readyButton) {
+                        readyButton.style.display = 'block';
+                    }
                     break;
                     
                 case 'playerLeft':
@@ -376,6 +378,13 @@
                 case 'playerReadyStatus':
                     console.log(`Player ${data.playerId} ready: ${data.ready} (${data.readyCount}/${data.totalPlayers})`);
                     updateStatus(`准备状态: ${data.readyCount}/${data.totalPlayers} 玩家已准备`);
+                    
+                    // Update room status with ready count
+                    const roomStatus = document.getElementById('roomStatus');
+                    if (roomStatus && multiplayer.roomId) {
+                        const playerCount = multiplayer.roomPlayers.size;
+                        roomStatus.textContent = `房间: ${multiplayer.roomId} (${playerCount} 人, ${data.readyCount} 人准备)`;
+                    }
                     break;
             }
         }
@@ -555,7 +564,11 @@
                     type: 'createRoom'
                 }));
                 updateStatus('创建房间中...');
-                showReadyButton(); // Show ready button when creating room
+                // Show ready button when creating room
+                const readyButton = document.getElementById('readyButton');
+                if (readyButton) {
+                    readyButton.style.display = 'block';
+                }
             }
         }
 
@@ -567,7 +580,11 @@
                     roomId: roomId
                 }));
                 updateStatus('加入房间中...');
-                showReadyButton(); // Show ready button when joining room
+                // Show ready button when joining room
+                const readyButton = document.getElementById('readyButton');
+                if (readyButton) {
+                    readyButton.style.display = 'block';
+                }
             }
         }
 
@@ -579,26 +596,7 @@
             }
         }
 
-        function showReadyButton() {
-            const readyButton = document.getElementById('readyButton');
-            console.log('showReadyButton called, button element:', readyButton);
-            if (readyButton) {
-                readyButton.style.display = 'block';
-                readyButton.style.visibility = 'visible';
-                readyButton.style.opacity = '1';
-                console.log('Ready button should now be visible');
-                console.log('Button display style:', readyButton.style.display);
-                console.log('Button visibility:', readyButton.style.visibility);
-                
-                // Add a visual indicator
-                updateStatus('准备按钮已显示 - 请点击准备');
-                
-                // Flash the button to make it more visible
-                readyButton.style.animation = 'flash 1s ease-in-out';
-            } else {
-                console.error('Ready button element not found!');
-            }
-        }
+
 
         function toggleReady() {
             multiplayer.ready = !multiplayer.ready;
@@ -620,7 +618,8 @@
             const roomStatus = document.getElementById('roomStatus');
             if (roomStatus && multiplayer.roomId) {
                 const playerCount = multiplayer.roomPlayers.size;
-                roomStatus.textContent = `房间: ${multiplayer.roomId} (${playerCount} 人)`;
+                const readyCount = multiplayer.ready ? 1 : 0; // Count local player if ready
+                roomStatus.textContent = `房间: ${multiplayer.roomId} (${playerCount} 人, ${readyCount} 人准备)`;
             }
         }
 
