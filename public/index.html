@@ -106,6 +106,67 @@
         .ability-status.reloading { color: #f44336; }
         .ability-status.ready { color: #4CAF50; }
         .ability-status.cooldown { color: #ff9800; }
+        
+        /* Abilities Panel Styles */
+        .abilities-container {
+            margin-bottom: 15px;
+        }
+        
+        .player-controls {
+            margin-bottom: 15px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            border: 1px solid #333;
+        }
+        
+        .player-controls h4 {
+            margin: 0 0 10px 0;
+            color: #4CAF50;
+            font-size: 14px;
+            text-align: center;
+        }
+        
+        .game-controls {
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            border: 1px solid #333;
+        }
+        
+        .game-controls h4 {
+            margin: 0 0 10px 0;
+            color: #2196F3;
+            font-size: 14px;
+            text-align: center;
+        }
+        
+        .control-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+            padding: 3px 0;
+        }
+        
+        .key {
+            background: #333;
+            color: #fff;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 11px;
+            font-weight: bold;
+            min-width: 40px;
+            text-align: center;
+        }
+        
+        .action {
+            color: #ccc;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+        
         @keyframes flash {
             0%, 100% { background-color: #4CAF50; }
             50% { background-color: #ffeb3b; color: #000; }
@@ -164,10 +225,111 @@
         <button class="button" onclick="clearLocalScores()">清空本地榜</button>
     </div>
 
-    <div class="panel" id="leaderboardPanel" style="top: 400px;">
+    <div class="panel" id="leaderboardPanel" style="right: 10px; top: 550px;">
         <h3>全服排行榜</h3>
         <button class="button" onclick="refreshLeaderboard()">刷新排行榜</button>
         <div id="leaderboardContent"></div>
+    </div>
+
+    <div class="panel" id="abilitiesPanel" style="left: 10px; top: 550px; width: 280px; max-height: 400px; overflow-y: auto;">
+        <h3>能力控制</h3>
+        <div class="abilities-container">
+            <div class="player-controls">
+                <h4>玩家 1 (WASD)</h4>
+                <div class="control-item">
+                    <span class="key">W/A/S/D</span>
+                    <span class="action">移动</span>
+                </div>
+                <div class="control-item">
+                    <span class="key">F</span>
+                    <span class="action">射击</span>
+                </div>
+                <div class="control-item">
+                    <span class="key">E</span>
+                    <span class="action">护盾</span>
+                </div>
+                <div class="control-item">
+                    <span class="key">Q</span>
+                    <span class="action">终极技能</span>
+                </div>
+                <div class="control-item">
+                    <span class="key">R</span>
+                    <span class="action">换弹</span>
+                </div>
+                <div class="control-item">
+                    <span class="key">SHIFT</span>
+                    <span class="action">冲刺</span>
+                </div>
+            </div>
+            
+            <div class="player-controls">
+                <h4>玩家 2 (IJKL)</h4>
+                <div class="control-item">
+                    <span class="key">I/J/K/L</span>
+                    <span class="action">移动</span>
+                </div>
+                <div class="control-item">
+                    <span class="key">H</span>
+                    <span class="action">射击</span>
+                </div>
+                <div class="control-item">
+                    <span class="key">U</span>
+                    <span class="action">护盾</span>
+                </div>
+                <div class="control-item">
+                    <span class="key">P</span>
+                    <span class="action">终极技能</span>
+                </div>
+                <div class="control-item">
+                    <span class="key">;</span>
+                    <span class="action">换弹</span>
+                </div>
+                <div class="control-item">
+                    <span class="key">O</span>
+                    <span class="action">冲刺</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="game-controls">
+            <h4>游戏控制</h4>
+            <div class="control-item">
+                <span class="key">空格</span>
+                <span class="action">开始游戏</span>
+            </div>
+            <div class="control-item">
+                <span class="key">P</span>
+                <span class="action">暂停</span>
+            </div>
+            <div class="control-item">
+                <span class="key">C</span>
+                <span class="action">切换目标</span>
+            </div>
+            <div class="control-item">
+                <span class="key">X</span>
+                <span class="action">波次模式</span>
+            </div>
+            <div class="control-item">
+                <span class="key">T</span>
+                <span class="action">硬锁定</span>
+            </div>
+            <div class="control-item">
+                <span class="key">Y</span>
+                <span class="action">锁定策略</span>
+            </div>
+            <div class="control-item">
+                <span class="key">G</span>
+                <span class="action">PVP模式</span>
+            </div>
+            <div class="control-item">
+                <span class="key">V</span>
+                <span class="action">分屏模式</span>
+            </div>
+            <div class="control-item">
+                <span class="key">M</span>
+                <span class="action">地图编辑器</span>
+            </div>
+        </div>
     </div>
 
     <div class="panel" id="abilityPanel" style="left: 10px; top: 120px; width: 200px;">
