@@ -460,41 +460,72 @@
         function handleRemoteGameState(playerId, state) {
             // Handle game state updates from other players
             if (state && state.players) {
-                // Update enemy positions and states
+                // Update enemy positions and states (from host)
                 if (state.enemies) {
                     gameState.enemies = state.enemies;
                 }
                 
-                // Update bullets from other players
+                // Update all bullets (host controls all bullets)
                 if (state.bullets) {
-                    // Only update bullets that aren't from this player
-                    const remoteBullets = state.bullets.filter(bullet => 
-                        bullet.playerId !== multiplayer.playerIndex + 1
-                    );
-                    gameState.bullets = gameState.bullets.filter(bullet => 
-                        bullet.playerId === multiplayer.playerIndex + 1
-                    ).concat(remoteBullets);
+                    gameState.bullets = state.bullets;
                 }
                 
-                // Update effects
+                // Update effects (host controls all effects)
                 if (state.effects) {
                     gameState.effects = state.effects;
+                }
+                
+                // Update wave and score
+                if (state.wave) {
+                    gameState.wave = state.wave;
+                }
+                if (state.score !== undefined) {
+                    gameState.score = state.score;
+                }
+                
+                // Update player states (but preserve local player input)
+                if (state.players) {
+                    state.players.forEach((remotePlayer, index) => {
+                        if (index < gameState.players.length) {
+                            const localPlayer = gameState.players[index];
+                            // Update health, score, ammo, etc. but preserve position if this is local player
+                            if (index === multiplayer.playerIndex) {
+                                // For local player, only update non-position data
+                                localPlayer.hp = remotePlayer.hp;
+                                localPlayer.score = remotePlayer.score;
+                                localPlayer.ammo = remotePlayer.ammo;
+                                localPlayer.ult = remotePlayer.ult;
+                                localPlayer.shield = remotePlayer.shield;
+                            } else {
+                                // For remote players, update everything
+                                localPlayer.x = remotePlayer.x;
+                                localPlayer.y = remotePlayer.y;
+                                localPlayer.hp = remotePlayer.hp;
+                                localPlayer.score = remotePlayer.score;
+                                localPlayer.ammo = remotePlayer.ammo;
+                                localPlayer.ult = remotePlayer.ult;
+                                localPlayer.shield = remotePlayer.shield;
+                            }
+                        }
+                    });
                 }
             }
         }
 
         function sendGameState() {
-            if (multiplayer.connected && multiplayer.ws) {
+            if (multiplayer.connected && multiplayer.ws && multiplayer.playerIndex === 0) {
                 const stateToSend = {
                     players: gameState.players.map(p => ({
                         x: p.x, y: p.y, hp: p.hp, score: p.score,
-                        shield: p.shield, ult: p.ult, ammo: p.ammo
+                        shield: p.shield, ult: p.ult, ammo: p.ammo,
+                        reloading: p.reloading, dashCooldown: p.dashCooldown
                     })),
                     enemies: gameState.enemies,
                     bullets: gameState.bullets,
                     effects: gameState.effects,
                     wave: gameState.wave,
                     score: gameState.score,
+                    teamScore: gameState.teamScore,
                     timestamp: Date.now()
                 };
                 
@@ -710,14 +741,14 @@
             
             gameState.players.push({
                 id: 1, x: centerX - 50, y: centerY, vx: 0, vy: 0,
-                hp: 100, maxHp: 100, ult: 0, maxUlt: 100, ammo: 30, maxAmmo: 30,
+                hp: 300, maxHp: 300, ult: 0, maxUlt: 100, ammo: 50, maxAmmo: 50,
                 score: 0, reloading: false, shield: false, dashCooldown: 0,
                 color: '#4CAF50', size: 20, gunAngle: 0, lastShot: 0
             });
             
             gameState.players.push({
                 id: 2, x: centerX + 50, y: centerY, vx: 0, vy: 0,
-                hp: 100, maxHp: 100, ult: 0, maxUlt: 100, ammo: 30, maxAmmo: 30,
+                hp: 300, maxHp: 300, ult: 0, maxUlt: 100, ammo: 50, maxAmmo: 50,
                 score: 0, reloading: false, shield: false, dashCooldown: 0,
                 color: '#2196F3', size: 20, gunAngle: 0, lastShot: 0
             });
@@ -866,35 +897,38 @@
         function update(deltaTime) {
             const dt = deltaTime / 1000;
             
-            // Update players
-            updatePlayers(dt);
-            
-            // Update enemies
-            updateEnemies(dt);
-            
-            // Update bullets
-            updateBullets(dt);
-            
-            // Update effects
-            updateEffects(dt);
-            
-            // Update camera
-            centerCamera();
-            
-            // Check wave completion
-            if (gameState.waveMode && gameState.enemies.length === 0) {
-                gameState.wave++;
-                spawnWave();
-                showBanner(`第 ${gameState.wave} 波！`);
+            // Only update game logic if this is the host (player 0) or single player
+            if (!multiplayer.connected || multiplayer.playerIndex === 0) {
+                // Update players
+                updatePlayers(dt);
+                
+                // Update enemies
+                updateEnemies(dt);
+                
+                // Update bullets
+                updateBullets(dt);
+                
+                // Update effects
+                updateEffects(dt);
+                
+                // Check wave completion
+                if (gameState.waveMode && gameState.enemies.length === 0) {
+                    gameState.wave++;
+                    spawnWave();
+                    showBanner(`第 ${gameState.wave} 波！`);
+                }
             }
+            
+            // Update camera (always local)
+            centerCamera();
             
             // Update team score
             gameState.teamScore = gameState.players.reduce((sum, p) => sum + p.score, 0);
             document.getElementById('currentScore').textContent = gameState.teamScore;
             document.getElementById('teamScore').textContent = gameState.teamScore;
             
-            // Send game state to other players (less frequently than input)
-            if (multiplayer.connected && Date.now() % 200 < 16) { // ~5 times per second
+            // Send game state to other players (more frequently for better sync)
+            if (multiplayer.connected && Date.now() % 100 < 16) { // ~10 times per second
                 sendGameState();
             }
         }
@@ -1186,7 +1220,7 @@
                             y: enemy.y,
                             vx: Math.cos(angle) * bulletSpeed,
                             vy: Math.sin(angle) * bulletSpeed,
-                            size: 2, color: '#f44336', playerId: 0, damage: 10
+                            size: 2, color: '#f44336', playerId: 0, damage: 5
                         });
                     }
                 }
@@ -1469,6 +1503,14 @@
                     ctx.beginPath();
                     ctx.arc(player.x, player.y, player.size + 2, 0, Math.PI * 2);
                     ctx.stroke();
+                }
+                
+                // Show host indicator
+                if (multiplayer.connected && index === 0) {
+                    ctx.fillStyle = '#ffaa00';
+                    ctx.font = '10px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('HOST', player.x, player.y - player.size - 25);
                 }
                 
                 // Player number indicator
