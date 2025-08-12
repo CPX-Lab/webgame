@@ -356,13 +356,16 @@
                     
                 case 'gameStart':
                     console.log('Game starting synchronously');
-                    startGameInternal();
+                    // Only start if we haven't already started from countdown
+                    if (!gameState.running) {
+                        startGameInternal();
+                    }
                     break;
                     
                 case 'gameStartRequest':
                     // Another player requested game start
                     console.log('Another player requested game start');
-                    startCountdown();
+                    startSynchronizedCountdown(data.startTime);
                     break;
                     
                 case 'gameStartDenied':
@@ -392,6 +395,32 @@
                     showBanner('游戏开始！');
                 }
             }, 1000);
+        }
+
+        function startSynchronizedCountdown(startTime) {
+            console.log('Starting synchronized countdown to:', new Date(startTime).toISOString());
+            console.log('Current time:', new Date().toISOString());
+            console.log('Time difference:', startTime - Date.now(), 'ms');
+            
+            const countdownInterval = setInterval(() => {
+                const now = Date.now();
+                const timeLeft = Math.max(0, startTime - now);
+                const secondsLeft = Math.ceil(timeLeft / 1000);
+                
+                if (secondsLeft > 0) {
+                    updateStatus(`游戏将在 ${secondsLeft} 秒后开始... (${timeLeft}ms)`);
+                    showBanner(`${secondsLeft}`);
+                } else {
+                    clearInterval(countdownInterval);
+                    updateStatus('游戏开始！');
+                    showBanner('游戏开始！');
+                    
+                    // Small delay to ensure all clients are synchronized
+                    setTimeout(() => {
+                        startGameInternal();
+                    }, 50);
+                }
+            }, 50); // Check every 50ms for very precise timing
         }
 
         function handleRemotePlayerInput(playerId, playerIndex, input) {
@@ -653,7 +682,7 @@
                     type: 'requestGameStart',
                     roomId: multiplayer.roomId
                 }));
-                updateStatus('等待其他玩家准备...');
+                updateStatus('请求同步开始游戏...');
                 return;
             }
             

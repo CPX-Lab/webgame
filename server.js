@@ -408,22 +408,27 @@ function handleGameStartRequest(playerId, roomId) {
   // Mark room as started
   room.gameStarted = true;
   
-  // Notify all players in the room about the game start request
+  // Calculate synchronized start time (3 seconds from now)
+  const startTime = Date.now() + 3000;
+  
+  // Notify all players in the room about the game start request with exact start time
   broadcastToRoom(roomId, {
     type: 'gameStartRequest',
     playerId: playerId,
-    playerIndex: player.playerIndex
+    playerIndex: player.playerIndex,
+    startTime: startTime
   });
   
-  // Start a countdown timer for synchronized start
+  // Also send a final start signal at the exact time
   setTimeout(() => {
-    // Start the game for all players in the room
     broadcastToRoom(roomId, {
-      type: 'gameStart'
+      type: 'gameStart',
+      startTime: startTime
     });
-    
-    console.log(`Game started for room ${roomId} with ${room.players.size} players`);
-  }, 3000); // 3 second countdown
+    console.log(`Final game start signal sent for room ${roomId}`);
+  }, 3000);
+  
+  console.log(`Game start scheduled for room ${roomId} at ${new Date(startTime).toISOString()}`);
 }
 
 function handlePlayerReady(playerId, ready) {
