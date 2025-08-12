@@ -6,6 +6,9 @@
 # Or just run with no args to use the demo 64-bit N from this session.
 
 import sys, random, math, time
+import matplotlib.pyplot as plt
+import numpy as np
+from sympy import primerange
 
 # ---------- Utilities ----------
 
@@ -123,6 +126,183 @@ def factor(n, out):
     factor(d, out)
     factor(n // d, out)
 
+# ---------- Performance Analysis Functions ----------
+
+def generate_sample_primes(min_bits=20, max_bits=32, num_samples=50):
+    """Generate sample prime pairs for testing"""
+    print(f"Generating {num_samples} prime pairs...")
+    
+    primes = []
+    for bits in range(min_bits, max_bits + 1):
+        # Generate primes in different bit ranges
+        min_val = 2**(bits-1)
+        max_val = 2**bits - 1
+        
+        # Get primes in this range
+        range_primes = list(primerange(min_val, min(max_val, min_val + 1000000)))
+        
+        if len(range_primes) >= 2:
+            # Sample some prime pairs from this range
+            samples_per_range = max(1, num_samples // (max_bits - min_bits + 1))
+            for _ in range(min(samples_per_range, len(range_primes) // 2)):
+                p = random.choice(range_primes)
+                q = random.choice(range_primes)
+                if p != q:
+                    primes.append((p, q, p * q))
+    
+    # If we don't have enough, generate more
+    while len(primes) < num_samples:
+        bits = random.randint(min_bits, max_bits)
+        min_val = 2**(bits-1)
+        max_val = 2**bits - 1
+        range_primes = list(primerange(min_val, min(max_val, min_val + 100000)))
+        
+        if len(range_primes) >= 2:
+            p = random.choice(range_primes)
+            q = random.choice(range_primes)
+            if p != q and (p, q, p * q) not in primes:
+                primes.append((p, q, p * q))
+    
+    return primes[:num_samples]
+
+def test_factorization_performance(prime_pairs, num_trials=3):
+    """Test factorization performance on multiple samples"""
+    results = []
+    
+    print(f"Testing factorization on {len(prime_pairs)} samples with {num_trials} trials each...")
+    
+    for i, (p, q, N) in enumerate(prime_pairs):
+        print(f"Testing sample {i+1}/{len(prime_pairs)}: N = {N} ({N.bit_length()} bits)")
+        
+        times = []
+        for trial in range(num_trials):
+            t0 = time.time()
+            fs = []
+            factor(N, fs)
+            fs.sort()
+            t1 = time.time()
+            
+            # Verify factorization
+            prod = 1
+            for f in fs:
+                prod *= f
+            if prod != N:
+                print(f"  WARNING: Factorization failed for N={N}")
+                continue
+                
+            times.append((t1 - t0) * 1000)  # Convert to milliseconds
+        
+        if times:
+            avg_time = np.mean(times)
+            std_time = np.std(times)
+            results.append({
+                'N': N,
+                'p': p,
+                'q': q,
+                'bit_length': N.bit_length(),
+                'avg_time_ms': avg_time,
+                'std_time_ms': std_time,
+                'times': times
+            })
+    
+    return results
+
+def plot_performance_results(results):
+    """Plot performance results"""
+    if not results:
+        print("No results to plot")
+        return
+    
+    # Extract data
+    bit_lengths = [r['bit_length'] for r in results]
+    avg_times = [r['avg_time_ms'] for r in results]
+    std_times = [r['std_time_ms'] for r in results]
+    
+    # Create figure
+    plt.figure(figsize=(12, 8))
+    
+    # Plot 1: Time vs Bit Length
+    plt.subplot(2, 2, 1)
+    plt.scatter(bit_lengths, avg_times, alpha=0.6, s=50)
+    plt.xlabel('Bit Length of N')
+    plt.ylabel('Average Time (ms)')
+    plt.title('Factorization Time vs Bit Length')
+    plt.grid(True, alpha=0.3)
+    
+    # Plot 2: Log scale
+    plt.subplot(2, 2, 2)
+    plt.scatter(bit_lengths, avg_times, alpha=0.6, s=50)
+    plt.yscale('log')
+    plt.xlabel('Bit Length of N')
+    plt.ylabel('Average Time (ms) - Log Scale')
+    plt.title('Factorization Time vs Bit Length (Log Scale)')
+    plt.grid(True, alpha=0.3)
+    
+    # Plot 3: Grouped by bit length
+    plt.subplot(2, 2, 3)
+    bit_groups = {}
+    for r in results:
+        bl = r['bit_length']
+        if bl not in bit_groups:
+            bit_groups[bl] = []
+        bit_groups[bl].append(r['avg_time_ms'])
+    
+    bit_lengths_grouped = sorted(bit_groups.keys())
+    avg_times_grouped = [np.mean(bit_groups[bl]) for bl in bit_lengths_grouped]
+    std_times_grouped = [np.std(bit_groups[bl]) for bl in bit_lengths_grouped]
+    
+    plt.errorbar(bit_lengths_grouped, avg_times_grouped, yerr=std_times_grouped, 
+                marker='o', capsize=5, capthick=2)
+    plt.xlabel('Bit Length of N')
+    plt.ylabel('Average Time (ms)')
+    plt.title('Average Time by Bit Length')
+    plt.grid(True, alpha=0.3)
+    
+    # Plot 4: Performance distribution
+    plt.subplot(2, 2, 4)
+    plt.hist(avg_times, bins=20, alpha=0.7, edgecolor='black')
+    plt.xlabel('Average Time (ms)')
+    plt.ylabel('Frequency')
+    plt.title('Distribution of Factorization Times')
+    plt.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    plt.savefig('factorization_performance.png', dpi=300, bbox_inches='tight')
+    plt.show()
+    
+    # Print summary statistics
+    print("\n" + "="*60)
+    print("PERFORMANCE SUMMARY")
+    print("="*60)
+    print(f"Total samples tested: {len(results)}")
+    print(f"Bit length range: {min(bit_lengths)} - {max(bit_lengths)} bits")
+    print(f"Average time: {np.mean(avg_times):.2f} ± {np.std(avg_times):.2f} ms")
+    print(f"Median time: {np.median(avg_times):.2f} ms")
+    print(f"Min time: {min(avg_times):.2f} ms")
+    print(f"Max time: {max(avg_times):.2f} ms")
+    
+    # Performance by bit length
+    print("\nPerformance by bit length:")
+    for bl in sorted(bit_groups.keys()):
+        times = bit_groups[bl]
+        print(f"  {bl} bits: {np.mean(times):.2f} ± {np.std(times):.2f} ms (n={len(times)})")
+
+def run_performance_analysis():
+    """Run complete performance analysis"""
+    print("Starting performance analysis of factorization algorithm...")
+    print("="*60)
+    
+    # Generate sample primes
+    prime_pairs = generate_sample_primes(min_bits=20, max_bits=32, num_samples=30)
+    
+    # Test performance
+    results = test_factorization_performance(prime_pairs, num_trials=3)
+    
+    # Plot results
+    plot_performance_results(results)
+    
+    return results
+
 # ---------- Main ----------
 
 def main():
@@ -131,8 +311,15 @@ def main():
     demo_q = 4294912967
     demo_N = demo_p * demo_q  # 18446457677371445881 (64 bits)
 
+    # Generate primes in [x, y]
+    primes = list(primerange(1000000000, 1000050000 + 1))
+
     if len(sys.argv) >= 2:
-        N = int(sys.argv[1])
+        if sys.argv[1] == "--performance":
+            run_performance_analysis()
+            return
+        else:
+            N = int(sys.argv[1])
     else:
         N = demo_N
 
