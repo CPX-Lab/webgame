@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>浏览器英雄射击 Demo · 双人/硬锁/手柄/PVP/分屏/编辑器/存档/破坏掩体/波次/Boss/多规则/雷达/得分/排行榜</title>
+  <title>Browser Hero Shooter Demo · 2P/Hard Lock/Gamepad/PVP/Split Screen/Editor/Save/Load/Destructible Cover/Waves/Boss/Multiple Rules/Radar/Scoring/Leaderboard</title>
   <style>
     :root{ --bg:#0b0f14; --card:#121821; --ui:#1e2a3b; --acc:#5eead4; --hp:#ef4444; --text:#e5e7eb; }
     *{box-sizing:border-box}
@@ -42,91 +42,91 @@
 <body>
   <div id="wrap">
     <header>
-      <h1>浏览器英雄射击 Demo（原创机制）</h1>
-      <div class="pill">双人 · 硬锁/策略 · 手柄 · PVP · 分屏 · 地图编辑器 · 存档/载入 · 可破坏掩体 · 波次+Boss · 多种占点规则 · 雷达 · <b>得分/上传/排行榜</b></div>
+      <h1>Browser Hero Shooter Demo (Original Mechanics)</h1>
+      <div class="pill">2P · Hard Lock/Strategy · Gamepad · PVP · Split Screen · Map Editor · Save/Load · Destructible Cover · Waves+Boss · Multiple Capture Rules · Radar · <b>Scoring/Upload/Leaderboard</b></div>
     </header>
 
     <div id="hud" class="row">
       <div class="card stat p1" style="flex:1">
         <div class="tag"><span class="dot"></span><b>P1</b>（WASD / F / Shift / E / Q / R）</div>
-        <div style="margin-top:6px">生命值 <span id="hpText1">100</span></div>
+        <div style="margin-top:6px">Health <span id="hpText1">100</span></div>
         <div class="bar hp"><span id="hpBar1"></span></div>
-        <div style="margin-top:6px">能量/大招 <span id="ultText1">0%</span></div>
+        <div style="margin-top:6px">Energy/Ultimate <span id="ultText1">0%</span></div>
         <div class="bar"><span id="ultBar1"></span></div>
-        <div style="margin-top:6px">弹药 <span id="ammoText1">15 / 15</span></div>
+        <div style="margin-top:6px">Ammo <span id="ammoText1">15 / 15</span></div>
         <div class="bar"><span id="reloadBar1"></span></div>
       </div>
       <div class="card stat p2" style="flex:1">
         <div class="tag"><span class="dot"></span><b>P2</b>（IJKL / H / O / U / P / ;）</div>
-        <div style="margin-top:6px">生命值 <span id="hpText2">100</span></div>
+        <div style="margin-top:6px">Health <span id="hpText2">100</span></div>
         <div class="bar hp"><span id="hpBar2"></span></div>
-        <div style="margin-top:6px">能量/大招 <span id="ultText2">0%</span></div>
+        <div style="margin-top:6px">Energy/Ultimate <span id="ultText2">0%</span></div>
         <div class="bar"><span id="ultBar2"></span></div>
-        <div style="margin-top:6px">弹药 <span id="ammoText2">15 / 15</span></div>
+        <div style="margin-top:6px">Ammo <span id="ammoText2">15 / 15</span></div>
         <div class="bar"><span id="reloadBar2"></span></div>
       </div>
       <div class="card" style="flex:2.4;display:flex;align-items:center;gap:12px;justify-content:space-between">
         <div>
-          <div style="font-weight:700;margin-bottom:4px">全局操作</div>
+          <div style="font-weight:700;margin-bottom:4px">Global Controls</div>
           <div style="display:flex;gap:10px;flex-wrap:wrap">
-            <div><kbd>P</kbd> 暂停</div>
-            <div><kbd>T</kbd> 硬锁</div>
-            <div><kbd>Y</kbd> 锁定策略</div>
+            <div><kbd>P</kbd> Pause</div>
+            <div><kbd>T</kbd> Hard Lock</div>
+            <div><kbd>Y</kbd> Lock Strategy</div>
             <div><kbd>G</kbd> PVP</div>
-            <div><kbd>V</kbd> 分屏</div>
-            <div><kbd>M</kbd> 编辑器</div>
-            <div><kbd>1</kbd>/<kbd>2</kbd>/<kbd>3</kbd> 工具（障碍/刷怪点/破坏掩体）</div>
-            <div><kbd>X</kbd> 波次</div>
-            <div><kbd>C</kbd> 切换占点规则</div>
-            <div><kbd>Space</kbd> 重开</div>
+            <div><kbd>V</kbd> Split Screen</div>
+            <div><kbd>M</kbd> Editor</div>
+            <div><kbd>1</kbd>/<kbd>2</kbd>/<kbd>3</kbd> Tools (Obstacle/Spawn/Destructible)</div>
+            <div><kbd>X</kbd> Waves</div>
+            <div><kbd>C</kbd> Switch Objective</div>
+            <div><kbd>Space</kbd> Restart</div>
           </div>
-          <div class="hint" style="margin-top:6px">占点规则：单点 / 移动点 / 双点 / 推进载具。Boss 每 5 波出现。</div>
+          <div class="hint" style="margin-top:6px">Objective Rules: Single Point / Moving Point / Dual Points / Payload. Boss appears every 5 waves.</div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <button id="startBtn" class="btn">开始/重开</button>
-          <button id="heroBtn" class="btn">切换英雄</button>
-          <button id="exportBtn" class="btn">导出地图</button>
-          <label class="btn" for="importFile" style="display:inline-block;cursor:pointer">导入地图</label>
+          <button id="startBtn" class="btn">Start/Restart</button>
+          <button id="heroBtn" class="btn">Switch Hero</button>
+          <button id="exportBtn" class="btn">Export Map</button>
+          <label class="btn" for="importFile" style="display:inline-block;cursor:pointer">Import Map</label>
           <input id="importFile" type="file" accept="application/json" style="display:none" />
           <div class="slotbar">
-            <button class="btn" id="save1">存槽1</button>
-            <button class="btn" id="load1">读槽1</button>
-            <button class="btn" id="save2">存槽2</button>
-            <button class="btn" id="load2">读槽2</button>
-            <button class="btn" id="save3">存槽3</button>
-            <button class="btn" id="load3">读槽3</button>
+            <button class="btn" id="save1">Save Slot 1</button>
+            <button class="btn" id="load1">Load Slot 1</button>
+            <button class="btn" id="save2">Save Slot 2</button>
+            <button class="btn" id="load2">Load Slot 2</button>
+            <button class="btn" id="save3">Save Slot 3</button>
+            <button class="btn" id="load3">Load Slot 3</button>
           </div>
         </div>
       </div>
 
       <div class="card" style="flex:1.6">
-        <div style="font-weight:700;margin-bottom:6px">记分 & 上传</div>
+        <div style="font-weight:700;margin-bottom:6px">Scoring & Upload</div>
         <div class="scoregrid">
-          <div class="field"><span>昵称 P1</span><input id="name1" placeholder="P1" /></div>
-          <div class="field"><span>昵称 P2</span><input id="name2" placeholder="P2" /></div>
-          <div>分数 P1：<b id="score1">0</b></div>
-          <div>分数 P2：<b id="score2">0</b></div>
-          <div>团队当前：<b id="teamscore">0</b></div>
-          <div>团队最高：<b id="hiscoreTeam">0</b></div>
+          <div class="field"><span>Name P1</span><input id="name1" placeholder="P1" /></div>
+          <div class="field"><span>Name P2</span><input id="name2" placeholder="P2" /></div>
+          <div>Score P1: <b id="score1">0</b></div>
+          <div>Score P2: <b id="score2">0</b></div>
+          <div>Team Current: <b id="teamscore">0</b></div>
+          <div>Team High: <b id="hiscoreTeam">0</b></div>
         </div>
         <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
-          <button id="uploadBtn" class="btn" title="可选：配置后端地址后上传成绩">上传成绩</button>
-          <button id="clearScoreBtn" class="btn" title="清除本地最高分">清空本地榜</button>
+          <button id="uploadBtn" class="btn" title="Optional: Configure backend URL to upload scores">Upload Score</button>
+          <button id="clearScoreBtn" class="btn" title="Clear local high scores">Clear Local Scores</button>
         </div>
-        <div class="hint" style="margin-top:6px">击杀敌人/首领与占点都会获得分数。可选地配置一个后端 API 来保存全服排行榜。</div>
+        <div class="hint" style="margin-top:6px">Killing enemies/bosses and capturing points earns points. Optionally configure a backend API to save global leaderboard.</div>
       </div>
 
       <div class="card" style="flex:1.6">
-        <div style="font-weight:700;margin-bottom:6px">全服排行榜</div>
-        <div class="hint" id="lbHint">未启用（在源码 backend.enabled=true 且配置 backend.leaderboardUrl 后可用）</div>
+        <div style="font-weight:700;margin-bottom:6px">Global Leaderboard</div>
+        <div class="hint" id="lbHint">Not enabled (set backend.enabled=true and configure backend.leaderboardUrl in source code)</div>
         <table class="table" style="margin-top:6px">
           <thead>
-            <tr><th>排名</th><th>玩家</th><th>分数</th><th>详情</th></tr>
+            <tr><th>Rank</th><th>Player</th><th>Score</th><th>Details</th></tr>
           </thead>
-          <tbody id="lbBody"><tr><td colspan="4" style="opacity:.7">暂无数据</td></tr></tbody>
+          <tbody id="lbBody"><tr><td colspan="4" style="opacity:.7">No data</td></tr></tbody>
         </table>
         <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
-          <button id="refreshLbBtn" class="btn">刷新排行榜</button>
+          <button id="refreshLbBtn" class="btn">Refresh Leaderboard</button>
         </div>
       </div>
     </div>
@@ -135,7 +135,7 @@
     <canvas id="canvas" width="960" height="540" tabindex="0"></canvas>
 
     <footer>
-      提示：教学用 2D 顶视角原创小游戏（HTML5 Canvas）。未使用任何受版权保护的素材或名称。
+      Note: Educational 2D top-down original mini-game (HTML5 Canvas). No copyrighted materials or names used.
     </footer>
   </div>
 
@@ -164,8 +164,8 @@
   };
 
   const heroStyles=[
-    {name:"疾风", tint1:"#60a5fa", tint2:"#93c5fd", tweak:{spd:1.1, damage:0.9, reload:0.9}},
-    {name:"壁垒", tint1:"#f59e0b", tint2:"#fbbf24", tweak:{spd:0.95, damage:1.1, reload:1.1}},
+    {name:"Swift", tint1:"#60a5fa", tint2:"#93c5fd", tweak:{spd:1.1, damage:0.9, reload:0.9}},
+    {name:"Fortress", tint1:"#f59e0b", tint2:"#fbbf24", tweak:{spd:0.95, damage:1.1, reload:1.1}},
   ];
   let heroIdx=0;
 
@@ -405,14 +405,14 @@
       ],
       team: teamScore
     };
-    if(!backend.enabled){ alert('后端未启用。'); return; }
+    if(!backend.enabled){ alert('Backend not enabled.'); return; }
     fetch(backend.submitUrl,{
       method:'POST',
       headers:{'Content-Type':'application/json', ...(backend.token? {Authorization:'Bearer '+backend.token}:{})},
       body:JSON.stringify(payload)
     }).then(r=>r.json().catch(()=>null)).then(res=>{
-      console.log('提交完成',res||''); alert('成绩已提交！'); fetchLeaderboard();
-    }).catch(err=>{ console.error(err); alert('提交失败：'+err.message); });
+      console.log('Submission complete',res||''); alert('Score submitted!'); fetchLeaderboard();
+    }).catch(err=>{ console.error(err); alert('Submission failed: '+err.message); });
   }
 
   function getTeamScore(){ return Math.round((players[0]?.score||0) + (players[1]?.score||0)); }
@@ -426,7 +426,7 @@
 
   // ======= 排行榜 =======
   function escapeHtml(s){ const map={'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}; return String(s).replace(/[&<>"']/g, ch=>map[ch]); }
-  function modeLabel(m){ return ['单点','移动点','双点','载具'][m] ?? m; }
+  function modeLabel(m){ return ['Single Point','Moving Point','Dual Points','Payload'][m] ?? m; }
   function renderLeaderboard(data){
     const body=document.getElementById('lbBody');
     const hint=document.getElementById('lbHint');
@@ -437,31 +437,31 @@
     list=list.slice(0, backend.leaderboardLimit||10);
     if(body){
       body.innerHTML = list.length ? list.map((e,i)=>{
-        const name = e.name || e.player || (e.players && e.players[0]?.name) || '匿名';
+        const name = e.name || e.player || (e.players && e.players[0]?.name) || 'Anonymous';
         const score = Math.round(e.score ?? e.team ?? 0);
         const ts = e.timestamp || e.time || e.createdAt || e.updatedAt || Date.now();
         const timeStr = new Date(ts).toLocaleString();
         const modeStr = modeLabel(e.mode);
-        const waveStr = (e.wave!=null)? ` / 波${e.wave}` : '';
+        const waveStr = (e.wave!=null)? ` / Wave ${e.wave}` : '';
         return `<tr><td>${i+1}</td><td>${escapeHtml(name)}</td><td>${score}</td><td><span class="badge">${modeStr}${waveStr}</span> · ${escapeHtml(timeStr)}</td></tr>`;
-      }).join('') : `<tr><td colspan="4" style="opacity:.7">暂无数据</td></tr>`;
+      }).join('') : `<tr><td colspan="4" style="opacity:.7">No data</td></tr>`;
     }
   }
   async function fetchLeaderboard(){
     const hint=document.getElementById('lbHint');
-    if(!backend.enabled || !backend.leaderboardUrl){ if(hint) hint.textContent='未启用（在源码 backend.enabled=true 且配置 backend.leaderboardUrl 后可用）'; renderLeaderboard([]); return; }
-    if(hint) hint.textContent='加载中…';
+    if(!backend.enabled || !backend.leaderboardUrl){ if(hint) hint.textContent='Not enabled (set backend.enabled=true and configure backend.leaderboardUrl in source code)'; renderLeaderboard([]); return; }
+    if(hint) hint.textContent='Loading...';
     try{
       const r = await fetch(backend.leaderboardUrl, { headers: backend.token? {Authorization:'Bearer '+backend.token}:{}});
       const res = await r.json().catch(()=>null);
       if(hint) hint.textContent='';
       renderLeaderboard(res||[]);
-    }catch(e){ console.error(e); if(hint) hint.textContent='加载失败：'+e.message; renderLeaderboard([]); }
+    }catch(e){ console.error(e); if(hint) hint.textContent='Load failed: '+e.message; renderLeaderboard([]); }
   }
 
-  // 主循环
+  // Main loop
   function drawGrid(cam){
-    ctx.fillStyle="#0b1220"; // 背景
+    ctx.fillStyle="#0b1220"; // Background
     ctx.clearRect(0,0,canvas.width,canvas.height);
     ctx.fillRect(0,0,canvas.width,canvas.height);
     const grid=60; ctx.strokeStyle="#0f1b2e"; ctx.lineWidth=1;
@@ -475,29 +475,29 @@
   function drawRadar(x,y,w,h){ const sx=w/cfg.worldW, sy=h/cfg.worldH; ctx.save(); ctx.translate(x,y); ctx.fillStyle="rgba(0,0,0,0.35)"; ctx.fillRect(0,0,w,h); ctx.strokeStyle="#1f2937"; ctx.strokeRect(0,0,w,h); ctx.strokeStyle="rgba(94,234,212,0.8)"; if(objMode!==3){ ctx.beginPath(); ctx.arc(cfg.point.x*sx, cfg.point.y*sy, cfg.point.r*sx, 0, Math.PI*2); ctx.stroke(); if(objMode===2){ ctx.beginPath(); ctx.arc(cfg.pointB.x*sx, cfg.pointB.y*sy, cfg.pointB.r*sx, 0, Math.PI*2); ctx.stroke(); } } else { const cart=payloadPos(); ctx.strokeStyle="#5eead4"; ctx.strokeRect(cfg.payload.pathA.x*sx-2,cfg.payload.pathA.y*sy-2,4,4); ctx.strokeRect(cfg.payload.pathB.x*sx-2,cfg.payload.pathB.y*sy-2,4,4); ctx.fillStyle="#5eead4"; ctx.fillRect(cart.x*sx-2,cart.y*sy-2,4,4); } ctx.strokeStyle="rgba(148,163,184,0.6)"; for(const o of obstacles){ ctx.beginPath(); ctx.arc(o.x*sx, o.y*sy, o.r*sx, 0, Math.PI*2); ctx.stroke(); } ctx.fillStyle="rgba(239,68,68,0.9)"; for(const e of enemies){ ctx.fillRect(e.x*sx-1, e.y*sy-1, 2,2); } if(players[0]){ ctx.fillStyle="#60a5fa"; ctx.fillRect(players[0].x*sx-2, players[0].y*sy-2, 4,4); } if(players[1]){ ctx.fillStyle="#f59e0b"; ctx.fillRect(players[1].x*sx-2, players[1].y*sy-2, 4,4); } ctx.restore(); }
 
   function draw(){
-    if(splitOn && !editorOn){ ctx.save(); ctx.beginPath(); ctx.rect(0,0,canvas.width/2,canvas.height); ctx.clip(); drawScene(cam1); drawRadar(12,12,140,82); ctx.restore(); ctx.save(); ctx.beginPath(); ctx.rect(canvas.width/2,0,canvas.width/2,canvas.height); ctx.clip(); drawScene(cam2); drawRadar(canvas.width/2+12,12,140,82); ctx.restore(); ctx.fillStyle="#1f2937"; ctx.fillRect(canvas.width/2-1,0,2,canvas.height); ctx.fillStyle="#e5e7eb"; ctx.font="14px system-ui"; ctx.fillText(`P1 视角`,12,20); ctx.fillText(`P2 视角`,canvas.width/2+12,20); }
-    else { drawScene(camera); ctx.fillStyle="#e5e7eb"; ctx.font="16px system-ui"; const modeLabelTxt=['单点','移动点','双点','载具'][objMode]; const s1=Math.round(players[0]?.score||0), s2=Math.round(players[1]?.score||0); const team=getTeamScore(); ctx.fillText(`进度:${Math.floor(scoreP)}% | 规则:${modeLabelTxt} | 分数 P1:${s1} / P2:${s2} / 团队:${team}（最高 ${hiTeam}） | 硬锁:${hardLock?'开':'关'} | 策略:${['最近','残血','视锥'][lockMode]} | PVP:${pvpOn?'开':'关'} | 波次:${wavesOn?('第'+wave+(enemies.length? '波':'波（间歇）')):'关'} | 手柄:P1 ${pads[0]?'✓':'×'} / P2 ${pads[1]?'✓':'×'}`, 16, 24);
-      // 右上角雷达
+    if(splitOn && !editorOn){ ctx.save(); ctx.beginPath(); ctx.rect(0,0,canvas.width/2,canvas.height); ctx.clip(); drawScene(cam1); drawRadar(12,12,140,82); ctx.restore(); ctx.save(); ctx.beginPath(); ctx.rect(canvas.width/2,0,canvas.width/2,canvas.height); ctx.clip(); drawScene(cam2); drawRadar(canvas.width/2+12,12,140,82); ctx.restore(); ctx.fillStyle="#1f2937"; ctx.fillRect(canvas.width/2-1,0,2,canvas.height); ctx.fillStyle="#e5e7eb"; ctx.font="14px system-ui"; ctx.fillText(`P1 View`,12,20); ctx.fillText(`P2 View`,canvas.width/2+12,20); }
+    else { drawScene(camera); ctx.fillStyle="#e5e7eb"; ctx.font="16px system-ui"; const modeLabelTxt=['Single Point','Moving Point','Dual Points','Payload'][objMode]; const s1=Math.round(players[0]?.score||0), s2=Math.round(players[1]?.score||0); const team=getTeamScore(); ctx.fillText(`Progress:${Math.floor(scoreP)}% | Mode:${modeLabelTxt} | Score P1:${s1} / P2:${s2} / Team:${team} (High ${hiTeam}) | Hard Lock:${hardLock?'On':'Off'} | Strategy:${['Nearest','Low HP','Cone'][lockMode]} | PVP:${pvpOn?'On':'Off'} | Waves:${wavesOn?('Wave '+wave+(enemies.length? '':' (Break)')):'Off'} | Gamepad:P1 ${pads[0]?'✓':'×'} / P2 ${pads[1]?'✓':'×'}`, 16, 24);
+      // Top-right radar
       drawRadar(canvas.width-160,16,140,82);
-      // 覆盖层/提示 or 开局横幅
-      if(gamePaused && !editorOn){ ctx.fillStyle="rgba(0,0,0,0.45)"; ctx.fillRect(camera.x, camera.y, canvas.width, canvas.height); ctx.fillStyle="#e5e7eb"; ctx.textAlign='center'; ctx.font="28px system-ui"; ctx.fillText('按 开始/空格 键开始', camera.x+canvas.width/2, camera.y+canvas.height/2); ctx.textAlign='left'; }
-      else if(bannerOn){ ctx.save(); ctx.globalAlpha=0.9; ctx.fillStyle="#e5e7eb"; ctx.textAlign='center'; ctx.font="32px system-ui"; ctx.fillText('游戏开始！', camera.x+canvas.width/2, camera.y+canvas.height/2); ctx.textAlign='left'; ctx.restore(); }
+      // Overlay/hint or start banner
+      if(gamePaused && !editorOn){ ctx.fillStyle="rgba(0,0,0,0.45)"; ctx.fillRect(camera.x, camera.y, canvas.width, canvas.height); ctx.fillStyle="#e5e7eb"; ctx.textAlign='center'; ctx.font="28px system-ui"; ctx.fillText('Press Start/Space to begin', camera.x+canvas.width/2, camera.y+canvas.height/2); ctx.textAlign='left'; }
+      else if(bannerOn){ ctx.save(); ctx.globalAlpha=0.9; ctx.fillStyle="#e5e7eb"; ctx.textAlign='center'; ctx.font="32px system-ui"; ctx.fillText('Game Start!', camera.x+canvas.width/2, camera.y+canvas.height/2); ctx.textAlign='left'; ctx.restore(); }
     }
   }
 
   // 主循环
   function loop(){ requestAnimationFrame(loop); const dt=Math.min((now()-(_last||now()))/1000,1/30); _last=now(); pollPads();
-    // 相机
+    // Camera
     if(splitOn && !editorOn && players.length){ const p1=players[0], p2=players[1]; cam1.x=lerp(cam1.x, clamp(p1.x - canvas.width/4, 0, cfg.worldW-canvas.width/2), 0.12); cam1.y=lerp(cam1.y, clamp(p1.y - canvas.height/2, 0, cfg.worldH-canvas.height), 0.12); cam2.x=lerp(cam2.x, clamp(p2.x - canvas.width/4, 0, cfg.worldW-canvas.width/2), 0.12); cam2.y=lerp(cam2.y, clamp(p2.y - canvas.height/2, 0, cfg.worldH-canvas.height), 0.12); } else if(players.length){ const cx=(players[0].x+players[1].x)/2, cy=(players[0].y+players[1].y)/2; camera.x=lerp(camera.x, clamp(cx - canvas.width/2, 0, cfg.worldW-canvas.width), 0.12); camera.y=lerp(camera.y, clamp(cy - canvas.height/2, 0, cfg.worldH-canvas.height), 0.12); }
 
     if(!gamePaused){ players.forEach(p=>!p.dead&&p.step(dt)); bullets.forEach(b=>b.step(dt)); ebullets.forEach(b=>b.step(dt)); enemies.forEach(e=>e.step(dt)); fx.forEach(f=>f.step?f.step(dt):0);
-      // 碰撞：敌弹/玩家弹 -> 玩家
+      // Collision: Enemy bullets/Player bullets -> Player
       for(const p of players){ for(const eb of ebullets){ if(!p.dead && !eb.dead && Math.hypot(eb.x-p.x, eb.y-p.y)<16){ p.takeDamage(eb.damage); eb.dead=true; } } if(pvpOn){ for(const b of bullets){ if(!b.dead && b.owner!==p && Math.hypot(b.x-p.x,b.y-p.y)<16){ p.takeDamage(b.damage*0.9); b.dead=true; } } } }
-      // 玩家弹 -> 敌人/Boss
+      // Player bullets -> Enemy/Boss
       for(const b of bullets){ for(const e of enemies){ if(!b.dead && !e.dead && Math.hypot(b.x-e.x,b.y-e.y)<(e.radius||16)){ if(e.takeDamage) e.takeDamage(b.damage, b.owner); b.dead=true; } } }
-      // 清理
+      // Cleanup
       const clean=a=>{ for(let i=a.length-1;i>=0;i--) if(a[i].dead) a.splice(i,1); }; clean(bullets); clean(ebullets); clean(enemies); clean(fx); for(let i=obstacles.length-1;i>=0;i--) if(obstacles[i].dead) obstacles.splice(i,1);
-      // 目标 & 胜负
+      // Objective & Win/Lose
       updateObjective(dt);
       if(wavesOn && enemies.length===0) nextWave();
       if(!wavesOn && objMode!==3 && scoreP>=100) gamePaused=true;
@@ -507,16 +507,16 @@
     draw();
   }
 
-  // 自适应
+  // Responsive
   function onResize(){ const w=canvas.clientWidth; canvas.style.height=(w*9/16)+"px"; }
   addEventListener('resize', onResize); onResize();
 
-  // 启动
+  // Startup
   document.getElementById('exportBtn').onclick=exportMap;
-  // 恢复昵称
+  // Restore names
   document.getElementById('name1').value=localStorage.getItem('name1')||'P1';
   document.getElementById('name2').value=localStorage.getItem('name2')||'P2';
-  // 进页面拉一次榜
+  // Load leaderboard on page load
   fetchLeaderboard();
   loop();
   </script>
