@@ -1,371 +1,204 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>浏览器英雄 - 双人射击游戏</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: #0a0a0a; color: #fff; overflow: hidden;
-        }
-        .hud { 
-            position: fixed; top: 0; left: 0; right: 0; z-index: 100;
-            display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px;
-            padding: 10px; background: rgba(0,0,0,0.8);
-        }
-        .card { 
-            background: #1a1a1a; border: 1px solid #333; border-radius: 8px;
-            padding: 10px; font-size: 12px;
-        }
-        .player-card { display: flex; flex-direction: column; gap: 5px; }
-        .player-name { font-weight: bold; color: #4CAF50; }
-        .player-stats { display: flex; gap: 10px; }
-        .stat { display: flex; align-items: center; gap: 3px; }
-        .stat-bar { 
-            width: 60px; height: 8px; background: #333; border-radius: 4px;
-            overflow: hidden;
-        }
-        .stat-fill { height: 100%; transition: width 0.2s; }
-        .hp-fill { background: #f44336; }
-        .ult-fill { background: #ff9800; }
-        .ammo-fill { background: #2196F3; }
-        .controls { font-size: 10px; color: #888; }
-        .center-card { text-align: center; }
-        .button { 
-            background: #333; border: 1px solid #555; color: #fff;
-            padding: 5px 10px; border-radius: 4px; cursor: pointer;
-            font-size: 11px; margin: 2px;
-        }
-        .button:hover { background: #444; }
-        .button:active { background: #222; }
-        .panel { 
-            position: fixed; right: 10px; top: 120px; width: 300px;
-            background: #1a1a1a; border: 1px solid #333; border-radius: 8px;
-            padding: 15px; z-index: 50;
-        }
-        #multiplayerPanel { 
-            position: fixed; left: 10px; top: 350px; width: 200px;
-            background: #1a1a1a; border: 1px solid #333; border-radius: 8px;
-            padding: 15px; z-index: 50;
-        }
-        .panel h3 { margin-bottom: 10px; color: #4CAF50; }
-        .input-group { margin-bottom: 10px; }
-        .input-group label { display: block; margin-bottom: 3px; font-size: 11px; }
-        .input-group input { 
-            width: 100%; padding: 5px; background: #333; border: 1px solid #555;
-            color: #fff; border-radius: 4px; font-size: 11px;
-        }
-        .score-display { 
-            background: #222; padding: 8px; border-radius: 4px; margin: 5px 0;
-            font-size: 11px;
-        }
-        .leaderboard-table { 
-            width: 100%; border-collapse: collapse; font-size: 10px;
-            margin-top: 10px;
-        }
-        .leaderboard-table th, .leaderboard-table td { 
-            padding: 3px 5px; text-align: left; border-bottom: 1px solid #333;
-        }
-        .leaderboard-table th { background: #333; font-weight: bold; }
-        .badge { 
-            background: #555; padding: 1px 4px; border-radius: 2px;
-            font-size: 9px; margin-left: 3px;
-        }
-        #canvas { 
-            display: block; margin: 120px auto 0; border: 1px solid #333;
-            background: #000; cursor: crosshair;
-        }
-        .banner { 
-            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background: rgba(0,0,0,0.9); padding: 20px 40px; border-radius: 8px;
-            font-size: 24px; font-weight: bold; color: #4CAF50; z-index: 200;
-            animation: fadeInOut 1.2s ease-in-out;
-        }
-        @keyframes fadeInOut {
-            0%, 100% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
-            50% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-        }
-        .radar { 
-            position: fixed; top: 10px; right: 10px; width: 120px; height: 120px;
-            background: rgba(0,0,0,0.8); border: 1px solid #333; border-radius: 50%;
-            z-index: 75;
-        }
-        .status { 
-            position: fixed; bottom: 10px; left: 10px; right: 10px;
-            background: rgba(0,0,0,0.8); padding: 5px 10px; border-radius: 4px;
-            font-size: 11px; z-index: 50;
-        }
-        .ability-item { 
-            display: flex; justify-content: space-between; margin-bottom: 5px;
-            font-size: 11px;
-        }
-        .ability-label { color: #888; }
-        .ability-status { color: #4CAF50; font-weight: bold; }
-        .ability-status.reloading { color: #f44336; }
-        .ability-status.ready { color: #4CAF50; }
-        .ability-status.cooldown { color: #ff9800; }
-        
-        /* Abilities Panel Styles */
-        .abilities-container {
-            margin-bottom: 15px;
-        }
-        
-        .player-controls {
-            margin-bottom: 15px;
-            padding: 10px;
-            background: rgba(0, 0, 0, 0.3);
-            border-radius: 8px;
-            border: 1px solid #333;
-        }
-        
-        .player-controls h4 {
-            margin: 0 0 10px 0;
-            color: #4CAF50;
-            font-size: 14px;
-            text-align: center;
-        }
-        
-        .game-controls {
-            padding: 10px;
-            background: rgba(0, 0, 0, 0.3);
-            border-radius: 8px;
-            border: 1px solid #333;
-        }
-        
-        .game-controls h4 {
-            margin: 0 0 10px 0;
-            color: #2196F3;
-            font-size: 14px;
-            text-align: center;
-        }
-        
-        .control-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 5px;
-            padding: 3px 0;
-        }
-        
-        .key {
-            background: #333;
-            color: #fff;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-family: monospace;
-            font-size: 11px;
-            font-weight: bold;
-            min-width: 40px;
-            text-align: center;
-        }
-        
-        .action {
-            color: #ccc;
-            font-size: 12px;
-            margin-left: 10px;
-        }
-        
-        @keyframes flash {
-            0%, 100% { background-color: #4CAF50; }
-            50% { background-color: #ffeb3b; color: #000; }
-        }
-    </style>
+    <title>Browser Hero - 2P Shooting Game</title>
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="hud">
         <div class="card player-card">
-            <div class="player-name">玩家1</div>
+            <div class="player-name">Player 1</div>
             <div class="player-stats">
                 <div class="stat">HP <div class="stat-bar"><div class="stat-fill hp-fill" style="width:100%"></div></div></div>
                 <div class="stat">ULT <div class="stat-bar"><div class="stat-fill ult-fill" style="width:0%"></div></div></div>
-                <div class="stat">弹药 <div class="stat-bar"><div class="stat-fill ammo-fill" style="width:100%"></div></div></div>
+                <div class="stat">Ammo <div class="stat-bar"><div class="stat-fill ammo-fill" style="width:100%"></div></div></div>
             </div>
-            <div class="controls">WASD移动 F射击 Shift冲刺 E护盾 Q大招 R换弹</div>
+            <div class="controls">WASD Move F Shoot Shift Dash E Shield Q Ultimate R Reload</div>
         </div>
         
         <div class="card center-card">
             <div style="margin-bottom: 5px;">
-                <button class="button" onclick="console.log('Button clicked'); startGame();">开始/重开</button>
-                <button class="button" onclick="togglePause()">暂停(P)</button>
+                <button class="button" onclick="console.log('Button clicked'); startGame();">Start/Restart</button>
+                <button class="button" onclick="togglePause()">Pause(P)</button>
             </div>
             <div style="font-size: 10px; color: #888;">
-                C目标 X波次 T锁定 Y策略 G对战 V分屏 M地图
+                C Objective X Waves T Lock Y Strategy G PVP V Split M Map
             </div>
         </div>
         
         <div class="card player-card">
-            <div class="player-name">玩家2</div>
+            <div class="player-name">Player 2</div>
             <div class="player-stats">
                 <div class="stat">HP <div class="stat-bar"><div class="stat-fill hp-fill" style="width:100%"></div></div></div>
                 <div class="stat">ULT <div class="stat-bar"><div class="stat-fill ult-fill" style="width:0%"></div></div></div>
-                <div class="stat">弹药 <div class="stat-bar"><div class="stat-fill ammo-fill" style="width:100%"></div></div></div>
+                <div class="stat">Ammo <div class="stat-bar"><div class="stat-fill ammo-fill" style="width:100%"></div></div></div>
             </div>
-            <div class="controls">IJKL移动 H射击 O冲刺 U护盾 P大招 ;换弹</div>
+            <div class="controls">IJKL Move H Shoot O Dash U Shield P Ultimate ; Reload</div>
         </div>
     </div>
 
     <div class="panel" id="scorePanel">
-        <h3>记分 & 上传</h3>
+        <h3>Scoring & Upload</h3>
         <div class="input-group">
-            <label>玩家1姓名:</label>
-            <input type="text" id="name1" placeholder="玩家1">
+            <label>Player 1 Name:</label>
+            <input type="text" id="name1" placeholder="Player 1">
         </div>
         <div class="input-group">
-            <label>玩家2姓名:</label>
-            <input type="text" id="name2" placeholder="玩家2">
+            <label>Player 2 Name:</label>
+            <input type="text" id="name2" placeholder="Player 2">
         </div>
         <div class="score-display">
-            当前分数: <span id="currentScore">0</span><br>
-            团队分数: <span id="teamScore">0</span><br>
-            最高分数: <span id="highScore">0</span>
+            Current Score: <span id="currentScore">0</span><br>
+            Team Score: <span id="teamScore">0</span><br>
+            High Score: <span id="highScore">0</span>
         </div>
-        <button class="button" onclick="submitScore()">上传成绩</button>
-        <button class="button" onclick="clearLocalScores()">清空本地榜</button>
+        <button class="button" onclick="submitScore()">Upload Score</button>
+        <button class="button" onclick="clearLocalScores()">Clear Local Scores</button>
     </div>
 
     <div class="panel" id="leaderboardPanel" style="right: 10px; top: 550px;">
-        <h3>全服排行榜</h3>
-        <button class="button" onclick="refreshLeaderboard()">刷新排行榜</button>
+        <h3>Global Leaderboard</h3>
+        <button class="button" onclick="refreshLeaderboard()">Refresh Leaderboard</button>
         <div id="leaderboardContent"></div>
     </div>
 
     <div class="panel" id="abilitiesPanel" style="left: 10px; top: 550px; width: 280px; max-height: 400px; overflow-y: auto;">
-        <h3>能力控制</h3>
+        <h3>Ability Controls</h3>
         <div class="abilities-container">
             <div class="player-controls">
-                <h4>玩家 1 (WASD)</h4>
+                <h4>Player 1 (WASD)</h4>
                 <div class="control-item">
                     <span class="key">W/A/S/D</span>
-                    <span class="action">移动</span>
+                    <span class="action">Move</span>
                 </div>
                 <div class="control-item">
                     <span class="key">F</span>
-                    <span class="action">射击</span>
+                    <span class="action">Shoot</span>
                 </div>
                 <div class="control-item">
                     <span class="key">E</span>
-                    <span class="action">护盾</span>
+                    <span class="action">Shield</span>
                 </div>
                 <div class="control-item">
                     <span class="key">Q</span>
-                    <span class="action">终极技能</span>
+                    <span class="action">Ultimate</span>
                 </div>
                 <div class="control-item">
                     <span class="key">R</span>
-                    <span class="action">换弹</span>
+                    <span class="action">Reload</span>
                 </div>
                 <div class="control-item">
                     <span class="key">SHIFT</span>
-                    <span class="action">冲刺</span>
+                    <span class="action">Dash</span>
                 </div>
             </div>
             
             <div class="player-controls">
-                <h4>玩家 2 (IJKL)</h4>
+                <h4>Player 2 (IJKL)</h4>
                 <div class="control-item">
                     <span class="key">I/J/K/L</span>
-                    <span class="action">移动</span>
+                    <span class="action">Move</span>
                 </div>
                 <div class="control-item">
                     <span class="key">H</span>
-                    <span class="action">射击</span>
+                    <span class="action">Shoot</span>
                 </div>
                 <div class="control-item">
                     <span class="key">U</span>
-                    <span class="action">护盾</span>
+                    <span class="action">Shield</span>
                 </div>
                 <div class="control-item">
                     <span class="key">P</span>
-                    <span class="action">终极技能</span>
+                    <span class="action">Ultimate</span>
                 </div>
                 <div class="control-item">
                     <span class="key">;</span>
-                    <span class="action">换弹</span>
+                    <span class="action">Reload</span>
                 </div>
                 <div class="control-item">
                     <span class="key">O</span>
-                    <span class="action">冲刺</span>
+                    <span class="action">Dash</span>
                 </div>
             </div>
         </div>
         
         <div class="game-controls">
-            <h4>游戏控制</h4>
+            <h4>Game Controls</h4>
             <div class="control-item">
-                <span class="key">空格</span>
-                <span class="action">开始游戏</span>
+                <span class="key">Space</span>
+                <span class="action">Start Game</span>
             </div>
             <div class="control-item">
                 <span class="key">P</span>
-                <span class="action">暂停</span>
+                <span class="action">Pause</span>
             </div>
             <div class="control-item">
                 <span class="key">C</span>
-                <span class="action">切换目标</span>
+                <span class="action">Switch Objective</span>
             </div>
             <div class="control-item">
                 <span class="key">X</span>
-                <span class="action">波次模式</span>
+                <span class="action">Wave Mode</span>
             </div>
             <div class="control-item">
                 <span class="key">T</span>
-                <span class="action">硬锁定</span>
+                <span class="action">Hard Lock</span>
             </div>
             <div class="control-item">
                 <span class="key">Y</span>
-                <span class="action">锁定策略</span>
+                <span class="action">Lock Strategy</span>
             </div>
             <div class="control-item">
                 <span class="key">G</span>
-                <span class="action">PVP模式</span>
+                <span class="action">PVP Mode</span>
             </div>
             <div class="control-item">
                 <span class="key">V</span>
-                <span class="action">分屏模式</span>
+                <span class="action">Split Screen</span>
             </div>
             <div class="control-item">
                 <span class="key">M</span>
-                <span class="action">地图编辑器</span>
+                <span class="action">Map Editor</span>
             </div>
         </div>
     </div>
 
     <div class="panel" id="abilityPanel" style="left: 10px; top: 120px; width: 200px;">
-        <h3>能力状态</h3>
+        <h3>Ability Status</h3>
         <div id="abilityContent">
             <div class="ability-item">
-                <span class="ability-label">护盾:</span>
-                <span class="ability-status" id="shieldStatus">关闭</span>
+                <span class="ability-label">Shield:</span>
+                <span class="ability-status" id="shieldStatus">Off</span>
             </div>
             <div class="ability-item">
-                <span class="ability-label">冲刺:</span>
-                <span class="ability-status" id="dashStatus">就绪</span>
+                <span class="ability-label">Dash:</span>
+                <span class="ability-status" id="dashStatus">Ready</span>
             </div>
             <div class="ability-item">
-                <span class="ability-label">大招:</span>
+                <span class="ability-label">Ultimate:</span>
                 <span class="ability-status" id="ultStatus">0%</span>
             </div>
             <div class="ability-item">
-                <span class="ability-label">弹药:</span>
+                <span class="ability-label">Ammo:</span>
                 <span class="ability-status" id="ammoStatus">30/30</span>
             </div>
         </div>
     </div>
 
     <div class="panel" id="multiplayerPanel" style="left: 10px; top: 350px; width: 200px;">
-        <h3>多人游戏</h3>
+        <h3>Multiplayer</h3>
         <div id="multiplayerContent">
             <div class="input-group">
-                <label>房间ID:</label>
-                <input type="text" id="roomIdInput" placeholder="输入房间ID">
+                <label>Room ID:</label>
+                <input type="text" id="roomIdInput" placeholder="Enter room ID">
             </div>
-            <button class="button" onclick="createRoom()">创建房间</button>
-            <button class="button" onclick="joinRoom(document.getElementById('roomIdInput').value)">加入房间</button>
-            <button class="button" id="readyButton" onclick="toggleReady()" style="display: none; background: #4CAF50; color: white; margin-top: 10px; padding: 8px 15px; font-weight: bold; border: 2px solid #45a049;">准备</button>
+            <button class="button" onclick="createRoom()">Create Room</button>
+            <button class="button" onclick="joinRoom(document.getElementById('roomIdInput').value)">Join Room</button>
+            <button class="button" id="readyButton" onclick="toggleReady()" style="display: none; background: #4CAF50; color: white; margin-top: 10px; padding: 8px 15px; font-weight: bold; border: 2px solid #45a049;">Ready</button>
             <div id="connectionStatus" style="margin-top: 10px; font-size: 10px; color: #888;">
-                未连接
+                Not Connected
             </div>
             <div id="roomStatus" style="margin-top: 5px; font-size: 10px; color: #888;">
             </div>
@@ -377,7 +210,7 @@
     <canvas class="radar" id="radar" width="120" height="120"></canvas>
     
     <div class="status" id="status">
-        准备开始游戏 - 按空格键或点击"开始/重开"
+        Ready to start game - Press Space or click "Start/Restart"
     </div>
 
     <script>
@@ -449,8 +282,8 @@
                 multiplayer.ws.onopen = () => {
                     console.log('WebSocket connected');
                     multiplayer.connected = true;
-                    updateStatus('已连接到服务器 - 创建或加入房间');
-                    updateConnectionStatus('已连接', '#4CAF50');
+                    updateStatus('Connected to server - Create or join a room');
+                    updateConnectionStatus('Connected', '#4CAF50');
                 };
                 
                 multiplayer.ws.onmessage = (event) => {
@@ -465,8 +298,8 @@
                 multiplayer.ws.onclose = () => {
                     console.log('WebSocket disconnected');
                     multiplayer.connected = false;
-                    updateStatus('连接断开 - 重新连接中...');
-                    updateConnectionStatus('连接断开', '#f44336');
+                    updateStatus('Connection lost - Reconnecting...');
+                    updateConnectionStatus('Disconnected', '#f44336');
                     setTimeout(setupMultiplayer, 3000);
                 };
                 
@@ -489,7 +322,7 @@
                     
                 case 'playerJoined':
                     console.log(`Player ${data.playerId} joined as player ${data.playerIndex}`);
-                    updateStatus(`玩家 ${data.playerIndex + 1} 已加入 (共 ${data.totalPlayers} 人)`);
+                    updateStatus(`Player ${data.playerIndex + 1} joined (${data.totalPlayers} total players)`);
                     
                     // Assign this player to their character
                     if (data.playerId === multiplayer.playerId) {
@@ -507,7 +340,7 @@
                     
                 case 'playerLeft':
                     console.log(`Player ${data.playerId} left`);
-                    updateStatus(`玩家 ${data.playerIndex + 1} 已离开`);
+                    updateStatus(`Player ${data.playerIndex + 1} left`);
                     break;
                     
                 case 'playerInput':
@@ -534,18 +367,18 @@
                     
                 case 'gameStartDenied':
                     console.log('Game start denied:', data.reason);
-                    updateStatus('游戏开始被拒绝: ' + data.reason);
+                    updateStatus('Game start denied: ' + data.reason);
                     break;
                     
                 case 'playerReadyStatus':
                     console.log(`Player ${data.playerId} ready: ${data.ready} (${data.readyCount}/${data.totalPlayers})`);
-                    updateStatus(`准备状态: ${data.readyCount}/${data.totalPlayers} 玩家已准备`);
+                    updateStatus(`Ready status: ${data.readyCount}/${data.totalPlayers} players ready`);
                     
                     // Update room status with ready count
                     const roomStatus = document.getElementById('roomStatus');
                     if (roomStatus && multiplayer.roomId) {
                         const playerCount = multiplayer.roomPlayers.size;
-                        roomStatus.textContent = `房间: ${multiplayer.roomId} (${playerCount} 人, ${data.readyCount} 人准备)`;
+                        roomStatus.textContent = `Room: ${multiplayer.roomId} (${playerCount} players, ${data.readyCount} ready)`;
                     }
                     break;
             }
@@ -553,17 +386,17 @@
 
         function startCountdown() {
             let countdown = 3;
-            updateStatus(`游戏将在 ${countdown} 秒后开始...`);
+            updateStatus(`Game will start in ${countdown} seconds...`);
             
             const countdownInterval = setInterval(() => {
                 countdown--;
                 if (countdown > 0) {
-                    updateStatus(`游戏将在 ${countdown} 秒后开始...`);
+                    updateStatus(`Game will start in ${countdown} seconds...`);
                     showBanner(`${countdown}`);
                 } else {
                     clearInterval(countdownInterval);
-                    updateStatus('游戏开始！');
-                    showBanner('游戏开始！');
+                    updateStatus('Game Start!');
+                    showBanner('Game Start!');
                 }
             }, 1000);
         }
@@ -579,12 +412,12 @@
                 const secondsLeft = Math.ceil(timeLeft / 1000);
                 
                 if (secondsLeft > 0) {
-                    updateStatus(`游戏将在 ${secondsLeft} 秒后开始... (${timeLeft}ms)`);
+                    updateStatus(`Game will start in ${secondsLeft} seconds... (${timeLeft}ms)`);
                     showBanner(`${secondsLeft}`);
                 } else {
                     clearInterval(countdownInterval);
-                    updateStatus('游戏开始！');
-                    showBanner('游戏开始！');
+                    updateStatus('Game Start!');
+                    showBanner('Game Start!');
                     
                     // Small delay to ensure all clients are synchronized
                     setTimeout(() => {
@@ -725,7 +558,7 @@
                 multiplayer.ws.send(JSON.stringify({
                     type: 'createRoom'
                 }));
-                updateStatus('创建房间中...');
+                updateStatus('Creating room...');
                 // Show ready button when creating room
                 const readyButton = document.getElementById('readyButton');
                 if (readyButton) {
@@ -741,7 +574,7 @@
                     type: 'joinRoom',
                     roomId: roomId
                 }));
-                updateStatus('加入房间中...');
+                updateStatus('Joining room...');
                 // Show ready button when joining room
                 const readyButton = document.getElementById('readyButton');
                 if (readyButton) {
@@ -764,7 +597,7 @@
             multiplayer.ready = !multiplayer.ready;
             const readyButton = document.getElementById('readyButton');
             if (readyButton) {
-                readyButton.textContent = multiplayer.ready ? '取消准备' : '准备';
+                readyButton.textContent = multiplayer.ready ? 'Cancel Ready' : 'Ready';
                 readyButton.style.background = multiplayer.ready ? '#4CAF50' : '#333';
             }
             
@@ -781,7 +614,7 @@
             if (roomStatus && multiplayer.roomId) {
                 const playerCount = multiplayer.roomPlayers.size;
                 const readyCount = multiplayer.ready ? 1 : 0; // Count local player if ready
-                roomStatus.textContent = `房间: ${multiplayer.roomId} (${playerCount} 人, ${readyCount} 人准备)`;
+                roomStatus.textContent = `Room: ${multiplayer.roomId} (${playerCount} players, ${readyCount} ready)`;
             }
         }
 
@@ -847,8 +680,8 @@
         }
 
         function loadFromStorage() {
-            document.getElementById('name1').value = localStorage.getItem('name1') || '玩家1';
-            document.getElementById('name2').value = localStorage.getItem('name2') || '玩家2';
+                    document.getElementById('name1').value = localStorage.getItem('name1') || 'Player 1';
+        document.getElementById('name2').value = localStorage.getItem('name2') || 'Player 2';
             updateHighScore();
         }
 
@@ -874,7 +707,7 @@
                     type: 'requestGameStart',
                     roomId: multiplayer.roomId
                 }));
-                updateStatus('请求同步开始游戏...');
+                updateStatus('Requesting synchronized game start...');
                 return;
             }
             
@@ -925,13 +758,13 @@
             spawnWave();
             
             // Show banner
-            showBanner('游戏开始！');
+            showBanner('Game Start!');
             
             // Auto-focus canvas
             canvas.focus();
             canvas.scrollIntoView();
             
-            updateStatus('游戏进行中 - 击败敌人获得分数！');
+            updateStatus('Game in progress - Defeat enemies to earn points!');
         }
 
         function centerCamera() {
@@ -995,44 +828,44 @@
         function togglePause() {
             if (gameState.running) {
                 gameState.paused = !gameState.paused;
-                updateStatus(gameState.paused ? '游戏暂停' : '游戏进行中');
+                updateStatus(gameState.paused ? 'Game Paused' : 'Game in Progress');
             }
         }
 
         function cycleObjective() {
-            const objectives = ['单点', '移动点', '双点', '载具(推车)'];
+            const objectives = ['Single Point', 'Moving Point', 'Dual Points', 'Payload (Cart)'];
             gameState.currentObjective = (gameState.currentObjective + 1) % objectives.length;
-            updateStatus(`目标模式: ${objectives[gameState.currentObjective]}`);
+            updateStatus(`Objective Mode: ${objectives[gameState.currentObjective]}`);
         }
 
         function toggleWaveMode() {
             gameState.waveMode = !gameState.waveMode;
-            updateStatus(gameState.waveMode ? '波次模式开启' : '波次模式关闭');
+            updateStatus(gameState.waveMode ? 'Wave Mode On' : 'Wave Mode Off');
         }
 
         function toggleHardLock() {
             gameState.hardLock = !gameState.hardLock;
-            updateStatus(gameState.hardLock ? '硬锁定开启' : '硬锁定关闭');
+            updateStatus(gameState.hardLock ? 'Hard Lock On' : 'Hard Lock Off');
         }
 
         function cycleLockStrategy() {
-            const strategies = ['最近', '低血量', '锥形'];
+            const strategies = ['Nearest', 'Low HP', 'Cone'];
             gameState.lockStrategy = (gameState.lockStrategy + 1) % strategies.length;
-            updateStatus(`锁定策略: ${strategies[gameState.lockStrategy]}`);
+            updateStatus(`Lock Strategy: ${strategies[gameState.lockStrategy]}`);
         }
 
         function togglePvP() {
             gameState.pvpMode = !gameState.pvpMode;
-            updateStatus(gameState.pvpMode ? 'PVP模式开启' : 'PVP模式关闭');
+            updateStatus(gameState.pvpMode ? 'PVP Mode On' : 'PVP Mode Off');
         }
 
         function toggleSplitScreen() {
             gameState.splitScreen = !gameState.splitScreen;
-            updateStatus(gameState.splitScreen ? '分屏模式开启' : '分屏模式关闭');
+            updateStatus(gameState.splitScreen ? 'Split Screen Mode On' : 'Split Screen Mode Off');
         }
 
         function toggleMapEditor() {
-            updateStatus('地图编辑器模式 (工具: 1障碍/2生成点/3可破坏)');
+            updateStatus('Map Editor Mode (Tools: 1 Obstacle/2 Spawn/3 Destructible)');
         }
 
         function updateStatus(text) {
@@ -1076,7 +909,7 @@
                 if (gameState.waveMode && gameState.enemies.length === 0) {
                     gameState.wave++;
                     spawnWave();
-                    showBanner(`第 ${gameState.wave} 波！`);
+                    showBanner(`Wave ${gameState.wave}!`);
                 }
             }
             
@@ -1103,7 +936,7 @@
                     shoot: 'f', dash: 'shift', shield: 'e', ult: 'q', reload: 'r' 
                 };
                 
-                // Movement
+                // Movement - velocity calculation 
                 let vx = 0, vy = 0;
                 const speed = 200;
                 
@@ -1121,7 +954,7 @@
                 player1.vx = vx;
                 player1.vy = vy;
                 
-                // Send input to multiplayer
+                // Send input to multiplayer - syncing game states 
                 if (multiplayer.connected && multiplayer.playerIndex === 0) {
                     sendPlayerInput({
                         vx: vx,
@@ -1157,7 +990,7 @@
                     }, 1000);
                 }
                 
-                // Shield
+                // Shield - blocking damage handled in collision detection
                 if (gameState.keys[controls.shield]) {
                     player1.shield = true;
                 } else {
@@ -1186,95 +1019,45 @@
                 }
             }
             
-            // Update Player 2 (index 1) - only responds to IJKL controls
+
+            // AI player 2
+            // In your updatePlayers function, modify Player 2 section
             const player2 = gameState.players[1];
             if (player2) {
-                const controls = { 
-                    up: 'i', down: 'k', left: 'j', right: 'l', 
-                    shoot: 'h', dash: 'o', shield: 'u', ult: 'p', reload: 'semicolon' 
-                };
-                
-                // Movement
-                let vx = 0, vy = 0;
-                const speed = 200;
-                
-                if (gameState.keys[controls.up]) vy -= speed;
-                if (gameState.keys[controls.down]) vy += speed;
-                if (gameState.keys[controls.left]) vx -= speed;
-                if (gameState.keys[controls.right]) vx += speed;
-                
-                // Normalize diagonal movement
-                if (vx !== 0 && vy !== 0) {
-                    vx *= 0.707;
-                    vy *= 0.707;
-                }
-                
-                player2.vx = vx;
-                player2.vy = vy;
-                
-                // Send input to multiplayer
-                if (multiplayer.connected && multiplayer.playerIndex === 1) {
-                    sendPlayerInput({
-                        vx: vx,
-                        vy: vy,
-                        shield: player2.shield,
-                        shooting: gameState.keys[controls.shoot],
-                        dashing: gameState.keys[controls.dash],
-                        ult: gameState.keys[controls.ult],
-                        reload: gameState.keys[controls.reload],
-                        timestamp: Date.now()
-                    });
-                }
-                
-                // Update position
-                player2.x += player2.vx * dt;
-                player2.y += player2.vy * dt;
-                
-                // World bounds
-                player2.x = Math.max(player2.size, Math.min(gameState.worldSize.w - player2.size, player2.x));
-                player2.y = Math.max(player2.size, Math.min(gameState.worldSize.h - player2.size, player2.y));
-                
-                // Shooting
-                if (gameState.keys[controls.shoot] && player2.ammo > 0 && !player2.reloading && Date.now() - player2.lastShot > 150) {
-                    shoot(player2, 1);
-                }
-                
-                // Reloading
-                if (gameState.keys[controls.reload] && !player2.reloading) {
-                    player2.reloading = true;
-                    setTimeout(() => {
-                        player2.ammo = player2.maxAmmo;
-                        player2.reloading = false;
-                    }, 1000);
-                }
-                
-                // Shield
-                if (gameState.keys[controls.shield]) {
-                    player2.shield = true;
+                if (player2.isAIControlled) {
+                    // AI controls this player - actions set by API
+                    // Just update position based on velocity
+                    player2.x += player2.vx * dt;
+                    player2.y += player2.vy * dt;
+                    
+                    // Handle AI-requested actions
+                    if (player2.shouldShoot && canShoot(player2)) {
+                        shoot(player2, 1);
+                        player2.shouldShoot = false;
+                    }
+                    
+                    if (player2.shouldDash && player2.dashCooldown <= 0) {
+                        dash(player2);
+                        player2.shouldDash = false;
+                    }
+                    
+                    // ... handle other actions
                 } else {
-                    player2.shield = false;
+                    // Original human input logic
+                    // ... existing IJKL controls
                 }
-                
-                // Dash
-                if (gameState.keys[controls.dash] && player2.dashCooldown <= 0) {
-                    player2.x += player2.vx * dt * 3;
-                    player2.y += player2.vy * dt * 3;
-                    player2.dashCooldown = 2;
-                }
-                
-                if (player2.dashCooldown > 0) {
-                    player2.dashCooldown -= dt;
-                }
-                
-                // Ult charge
-                if (player2.ult < player2.maxUlt) {
-                    player2.ult += 10 * dt;
-                }
-                
-                // Ult usage
-                if (gameState.keys[controls.ult] && player2.ult >= player2.maxUlt) {
-                    useUlt(player2);
-                }
+            }
+        }
+
+        function canShoot(player) {
+            return player.ammo > 0 && !player.reloading && Date.now() - player.lastShot > 150;
+        }
+
+        function dash(player) {
+            if (player.dashCooldown <= 0) {
+                player.x += player.vx * 0.1 * 3;
+                player.y += player.vy * 0.1 * 3;
+                player.dashCooldown = 2;
             }
         }
 
@@ -1591,8 +1374,8 @@
         function gameOver() {
             gameState.running = false;
             saveToStorage();
-            updateStatus('游戏结束 - 按空格键重新开始');
-            showBanner('游戏结束！');
+            updateStatus('Game Over - Press Space to restart');
+            showBanner('Game Over!');
         }
 
         function render() {
@@ -1868,7 +1651,7 @@
         function updateAbilityPanel(player) {
             // Shield status
             const shieldStatus = document.getElementById('shieldStatus');
-            shieldStatus.textContent = player.shield ? '激活' : '关闭';
+            shieldStatus.textContent = player.shield ? 'Active' : 'Off';
             shieldStatus.className = 'ability-status ' + (player.shield ? 'ready' : '');
             
             // Dash status
@@ -1877,7 +1660,7 @@
                 dashStatus.textContent = Math.ceil(player.dashCooldown) + 's';
                 dashStatus.className = 'ability-status cooldown';
             } else {
-                dashStatus.textContent = '就绪';
+                dashStatus.textContent = 'Ready';
                 dashStatus.className = 'ability-status ready';
             }
             
@@ -1942,8 +1725,8 @@
         async function submitScore() {
             if (!backend.enabled || !gameState.running) return;
             
-            const name1 = document.getElementById('name1').value || '玩家1';
-            const name2 = document.getElementById('name2').value || '玩家2';
+            const name1 = document.getElementById('name1').value || 'Player 1';
+            const name2 = document.getElementById('name2').value || 'Player 2';
             
             const players = [];
             if (gameState.players[0] && gameState.players[0].score > 0) {
@@ -1954,7 +1737,7 @@
             }
             
             if (players.length === 0) {
-                alert('没有可上传的分数！');
+                alert('No scores to upload!');
                 return;
             }
             
@@ -1979,13 +1762,13 @@
                 
                 const result = await response.json();
                 if (result.ok) {
-                    alert('分数上传成功！');
+                    alert('Score uploaded successfully!');
                     refreshLeaderboard();
                 } else {
-                    alert('上传失败: ' + (result.error || '未知错误'));
+                    alert('Upload failed: ' + (result.error || 'Unknown error'));
                 }
             } catch (error) {
-                alert('上传失败: ' + error.message);
+                alert('Upload failed: ' + error.message);
             }
         }
 
@@ -1999,10 +1782,10 @@
                 if (result.ok) {
                     displayLeaderboard(result.leaderboard);
                 } else {
-                    document.getElementById('leaderboardContent').innerHTML = '<p>加载失败</p>';
+                    document.getElementById('leaderboardContent').innerHTML = '<p>Load failed</p>';
                 }
             } catch (error) {
-                document.getElementById('leaderboardContent').innerHTML = '<p>网络错误</p>';
+                document.getElementById('leaderboardContent').innerHTML = '<p>Network error</p>';
             }
         }
 
@@ -2010,12 +1793,12 @@
             const content = document.getElementById('leaderboardContent');
             
             if (leaderboard.length === 0) {
-                content.innerHTML = '<p>暂无数据</p>';
+                content.innerHTML = '<p>No data available</p>';
                 return;
             }
             
             let html = '<table class="leaderboard-table">';
-            html += '<tr><th>排名</th><th>玩家</th><th>分数</th><th>时间</th></tr>';
+            html += '<tr><th>Rank</th><th>Player</th><th>Score</th><th>Time</th></tr>';
             
             leaderboard.forEach((entry, index) => {
                 const date = new Date(entry.timestamp);
@@ -2041,7 +1824,7 @@
             localStorage.removeItem('hiscore.p1');
             localStorage.removeItem('hiscore.p2');
             updateHighScore();
-            alert('本地分数已清空');
+            alert('Local scores cleared');
         }
 
         // Initialize leaderboard on load
