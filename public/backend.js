@@ -25,7 +25,8 @@
         };
 
         // Game state
-        let canvas, ctx, gameState = {
+        let canvas, ctx;
+        const gameState = {
             running: false, paused: false, wave: 1, score: 0, teamScore: 0,
             players: [], enemies: [], bullets: [], effects: [], obstacles: [],
             objectives: [], camera: { x: 0, y: 0 }, worldSize: { w: 2600, h: 1500 },
@@ -47,7 +48,7 @@
             // Auto-focus canvas
             canvas.focus();
             
-            // Check if ready button should be shown (for debugging)
+            // Check if ready button should be shown (for debugging) , 
             setTimeout(() => {
                 const readyButton = document.getElementById('readyButton');
                 console.log('On load - Ready button element:', readyButton);
@@ -129,6 +130,10 @@
                     
                 case 'playerInput':
                     handleRemotePlayerInput(data.playerId, data.playerIndex, data.input);
+                    break;
+                    
+                case 'rlAgentAction':
+                    handleRLAgentAction(data);
                     break;
                     
                 case 'gameState':
@@ -300,6 +305,24 @@
             }
         }
 
+        function handleRLAgentAction(data) {
+            // Handle actions from the RL agent for Player 2
+            const player2 = gameState.players[1];
+            if (player2 && player2.isAIControlled) {
+                // Store the AI actions to be processed in the next update
+                player2.aiActions = {
+                    vx: data.vx || 0,
+                    vy: data.vy || 0,
+                    shoot: data.shoot || false,
+                    dash: data.dash || false,
+                    shield: data.shield || false,
+                    ult: data.ult || false
+                };
+                
+                console.log('RL Agent action received:', player2.aiActions);
+            }
+        }
+
         function sendGameState() {
             if (multiplayer.connected && multiplayer.ws && multiplayer.playerIndex === 0) {
                 const stateToSend = {
@@ -440,6 +463,9 @@
                 } else if (key === 'm') {
                     e.preventDefault();
                     toggleMapEditor();
+                } else if (key === 'b') {
+                    e.preventDefault();
+                    togglePlayer2AI();
                 }
             });
             
@@ -528,7 +554,10 @@
                 id: 2, x: centerX + 50, y: centerY, vx: 0, vy: 0,
                 hp: 300, maxHp: 300, ult: 0, maxUlt: 100, ammo: 50, maxAmmo: 50,
                 score: 0, reloading: false, shield: false, dashCooldown: 0,
-                color: '#2196F3', size: 20, gunAngle: 0, lastShot: 0
+                color: '#2196F3', size: 20, gunAngle: 0, lastShot: 0,
+                isAIControlled: true,  // Make Player 2 AI-controlled by default
+                aiActions: null,       // Will store actions from RL agent
+                lastAIAction: 0       // Track last AI action time
             });
             
             console.log('Players spawned:', gameState.players);
@@ -650,6 +679,16 @@
 
         function toggleMapEditor() {
             updateStatus('Map Editor Mode (Tools: 1 Obstacle/2 Spawn/3 Destructible)');
+        }
+
+        function togglePlayer2AI() {
+            const player2 = gameState.players[1];
+            if (player2) {
+                player2.isAIControlled = !player2.isAIControlled;
+                const status = player2.isAIControlled ? 'AI' : 'Human';
+                updateStatus(`Player 2: ${status} Control`);
+                console.log(`Player 2 is now ${status} controlled`);
+            }
         }
 
         function updateStatus(text) {
@@ -804,31 +843,63 @@
             }
             
 
-            // AI player 2
-            // In your updatePlayers function, modify Player 2 section
+            // AI player 2 (RL Agent)
             const player2 = gameState.players[1];
             if (player2) {
                 if (player2.isAIControlled) {
-                    // AI controls this player - actions set by API
-                    // Just update position based on velocity
+                    // RL Agent controls this player
+                    updateAIPlayer(player2, dt);
+                } else {
+                    // Human input logic for IJKL controls
+                    const controls = { up: 'i', down: 'k', left: 'j', right: 'l', shoot: 'h', dash: 'o', shield: 'u', ult: 'p', reload: 'semicolon' };
+                    
+                    // Movement
+                    let vx = 0, vy = 0;
+                    const speed = 200;
+                    
+                    if (gameState.keys[controls.up]) vy -= speed;
+                    if (gameState.keys[controls.down]) vy += speed;
+                    if (gameState.keys[controls.left]) vx -= speed;
+                    if (gameState.keys[controls.right]) vx += speed;
+                    
+                    // Normalize diagonal movement
+                    if (vx !== 0 && vy !== 0) {
+                        vx *= 0.707;
+                        vy *= 0.707;
+                    }
+                    
+                    player2.vx = vx;
+                    player2.vy = vy;
+                    
+                    // Update position
                     player2.x += player2.vx * dt;
                     player2.y += player2.vy * dt;
                     
-                    // Handle AI-requested actions
-                    if (player2.shouldShoot && canShoot(player2)) {
+                    // World bounds
+                    player2.x = Math.max(player2.size, Math.min(gameState.worldSize.w - player2.size, player2.x));
+                    player2.y = Math.max(player2.size, Math.min(gameState.worldSize.h - player2.size, player2.y));
+                    
+                    // Shooting
+                    if (gameState.keys[controls.shoot] && canShoot(player2)) {
                         shoot(player2, 1);
-                        player2.shouldShoot = false;
                     }
                     
-                    if (player2.shouldDash && player2.dashCooldown <= 0) {
+                    // Dash
+                    if (gameState.keys[controls.dash] && player2.dashCooldown <= 0) {
                         dash(player2);
-                        player2.shouldDash = false;
                     }
                     
-                    // ... handle other actions
-                } else {
-                    // Original human input logic
-                    // ... existing IJKL controls
+                    // Shield
+                    if (gameState.keys[controls.shield]) {
+                        player2.shield = true;
+                    } else {
+                        player2.shield = false;
+                    }
+                    
+                    // Ult usage
+                    if (gameState.keys[controls.ult] && player2.ult >= player2.maxUlt) {
+                        useUlt(player2);
+                    }
                 }
             }
         }
@@ -843,6 +914,99 @@
                 player.y += player.vy * 0.1 * 3;
                 player.dashCooldown = 2;
             }
+        }
+
+        function updateAIPlayer(player, dt) {
+            // RL Agent controls this player
+            // Actions are set by the RL agent via WebSocket messages
+            
+            // Update position based on velocity set by AI
+            player.x += player.vx * dt;
+            player.y += player.vy * dt;
+            
+            // World bounds
+            player.x = Math.max(player.size, Math.min(gameState.worldSize.w - player.size, player.x));
+            player.y = Math.max(player.size, Math.min(gameState.worldSize.h - player.size, player.y));
+            
+            // Handle AI-requested actions
+            if (player.aiActions) {
+                // Movement
+                if (player.aiActions.vx !== undefined) {
+                    player.vx = player.aiActions.vx * 200; // Scale to game speed
+                }
+                if (player.aiActions.vy !== undefined) {
+                    player.vy = player.aiActions.vy * 200; // Scale to game speed
+                }
+                
+                // Shooting
+                if (player.aiActions.shoot && canShoot(player)) {
+                    shoot(player, 1);
+                }
+                
+                // Dash
+                if (player.aiActions.dash && player.dashCooldown <= 0) {
+                    dash(player);
+                }
+                
+                // Shield
+                if (player.aiActions.shield !== undefined) {
+                    player.shield = player.aiActions.shield;
+                }
+                
+                // Ult usage
+                if (player.aiActions.ult && player.ult >= player.maxUlt) {
+                    useUlt(player);
+                }
+                
+                // Clear actions after processing
+                player.aiActions = null;
+            }
+            
+            // Simple AI behavior when no RL agent is connected
+            if (!player.aiActions && !player.lastAIAction) {
+                simpleAIBehavior(player);
+            }
+        }
+
+        function simpleAIBehavior(player) {
+            // Basic AI behavior when RL agent is not connected
+            // This provides a fallback so the game is still playable
+            
+            // Find nearest enemy
+            let nearestEnemy = null;
+            let minDistance = Infinity;
+            
+            for (const enemy of gameState.enemies) {
+                const distance = Math.sqrt((enemy.x - player.x) ** 2 + (enemy.y - player.y) ** 2);
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    nearestEnemy = enemy;
+                }
+            }
+            
+            if (nearestEnemy) {
+                // Move towards nearest enemy
+                const dx = nearestEnemy.x - player.x;
+                const dy = nearestEnemy.y - player.y;
+                const distance = Math.sqrt(dx ** 2 + dy ** 2);
+                
+                if (distance > 0) {
+                    player.vx = (dx / distance) * 150;
+                    player.vy = (dy / distance) * 150;
+                }
+                
+                // Shoot if close enough
+                if (distance < 200 && canShoot(player)) {
+                    shoot(player, 1);
+                }
+                
+                // Use ult if charged and enemy is close
+                if (player.ult >= player.maxUlt && distance < 150) {
+                    useUlt(player);
+                }
+            }
+            
+            player.lastAIAction = Date.now();
         }
 
         function updateLocalPlayer(dt) {
