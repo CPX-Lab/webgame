@@ -502,3 +502,45 @@ server.listen(PORT, () => {
   console.log(`SQLite Leaderboard API listening on http://localhost:${PORT}`);
   console.log(`WebSocket server ready on ws://localhost:${PORT}`);
 });
+
+
+
+
+
+// API endpoints for game state and actions
+// In your existing server.js, add these endpoints
+app.get('/api/game/state', (req, res) => {
+  res.json({
+      players: gameState.players,
+      enemies: gameState.enemies,
+      bullets: gameState.bullets,
+      score: gameState.score,
+      wave: gameState.wave,
+      running: gameState.running
+  });
+});
+
+app.post('/api/game/action', (req, res) => {
+  const { playerId, action } = req.body;
+  
+  if (playerId === 2 && gameState.players[1]) {
+      // Apply AI action to Player 2
+      applyAIAction(gameState.players[1], action);
+  }
+  
+  res.json({ success: true });
+});
+
+function applyAIAction(player, action) {
+  // Movement
+  if (action.movement) {
+      player.vx = action.movement[0] * 200;
+      player.vy = action.movement[1] * 200;
+  }
+  
+  // Actions
+  if (action.shoot) player.shouldShoot = true;
+  if (action.shield) player.shield = true;
+  if (action.dash) player.shouldDash = true;
+  if (action.ultimate) player.shouldUlt = true;
+}
