@@ -230,9 +230,9 @@ app.get('/api/leaderboard', (req, res) => {
   }
 });
 
-// Serve index.html at root
+// Serve index_multiplayer.html at root
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  res.sendFile(path.join(__dirname, 'public', 'index_multiplayer.html'));
 });
 
 // Create HTTP server
@@ -312,6 +312,24 @@ function handleWebSocketMessage(playerId, data) {
     case 'playerReady':
       handlePlayerReady(playerId, data.ready);
       break;
+    case 'startRLAgent':
+      console.log('Starting RL agent for room:', data.roomId);
+      // Start the Python RL agent script
+      const { spawn } = require('child_process');
+      const pythonProcess = spawn('python', ['public/train_agent.py'], {
+          cwd: __dirname,
+          stdio: 'inherit'
+      });
+      
+      pythonProcess.on('error', (error) => {
+          console.error('Failed to start RL agent:', error);
+      });
+      
+      pythonProcess.on('exit', (code) => {
+          console.log('RL agent process exited with code:', code);
+      });
+      break;
+
   }
 }
 
