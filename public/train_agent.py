@@ -12,7 +12,7 @@ from stable_baselines3.common.callbacks import CheckpointCallback
 import time
 
 # Import our custom environment
-from browser_hero_env import BrowserHeroEnv
+from game_env import BrowserHeroEnv
 
 
 def create_env():
