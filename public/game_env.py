@@ -25,7 +25,7 @@ class BrowserHeroEnv(gym.Env):
     Gymnasium Env that talks to your browser game over websockets.
     NOTE: SB3 does NOT support Dict action spaces; keep actions as a single Box.
     """
-    metadata = {"render_modes": []}
+    metadata = {"render_modes": [], "render_fps":60}
 
     def __init__(
         self,
@@ -219,7 +219,7 @@ class BrowserHeroEnv(gym.Env):
         r = 0.0
         r += 1.0
         r += (me["hp"] / max(1, me["maxHp"])) * 2.0
-        r += me.get("score", 0) * 0.01
+        r += me.get("score", 0) * 0.1
         r += (me["ammo"] / max(1, me["maxAmmo"])) * 0.5
         if me["hp"] < 50: r -= 5.0
         px, py = me["x"], me["y"]
