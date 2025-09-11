@@ -47,8 +47,7 @@ def main():
         gamma=0.99,
         gae_lambda=0.95,
         clip_range=0.2,
-        verbose=1,
-        tensorboard_log="./logs/"
+        verbose=1
     )
     
     # Setup checkpointing
@@ -69,15 +68,14 @@ def main():
     try:
         model.learn(
             total_timesteps=100000,
-            callback=checkpoint_callback,
-            progress_bar=True
+            callback=checkpoint_callback
         )
-        
-        # Save final model
+            
+            # Save final model
         final_model_path = "models/browser_hero_ppo_final.zip"
         model.save(final_model_path)
         print(f"✅ Training complete! Model saved to {final_model_path}")
-        
+            
     except KeyboardInterrupt:
         print("\n⏹️ Training interrupted by user")
         # Save model anyway
