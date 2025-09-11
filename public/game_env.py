@@ -185,16 +185,16 @@ class BrowserHeroEnv(gym.Env):
 
         player_x = me["x"] / 2600
         player_y = me["y"] / 1500
-        player_hp = me["hp"] / max(1, me["maxHp"])
-        player_ult = me["ult"] / max(1, me["maxUlt"])
-        player_ammo = me["ammo"] / max(1, me["maxAmmo"])
+        player_hp = me["hp"] / max(1, me.get("maxHp", 100))
+        player_ult = me["ult"] / max(1, me.get("maxUlt", 100))
+        player_ammo = me["ammo"] / max(1, me.get("maxAmmo", 30))
         reloading = 1.0 if me.get("reloading", False) else 0.0
 
         enemy = _nearest(me, st.get("enemies", []))
         if enemy:
             enemy_rel_x = (enemy["x"] - me["x"]) / 2600
             enemy_rel_y = (enemy["y"] - me["y"]) / 1500
-            enemy_hp = enemy["hp"] / max(1, enemy["maxHp"])
+            enemy_hp = enemy["hp"] / max(1, enemy.get("maxHp", 100))
         else:
             enemy_rel_x = enemy_rel_y = enemy_hp = 0.0
 
@@ -218,9 +218,9 @@ class BrowserHeroEnv(gym.Env):
             return 0.0
         r = 0.0
         r += 1.0
-        r += (me["hp"] / max(1, me["maxHp"])) * 2.0
+        r += (me["hp"] / max(1, me.get("maxHp", 100))) * 2.0
         r += me.get("score", 0) * 0.1
-        r += (me["ammo"] / max(1, me["maxAmmo"])) * 0.5
+        r += (me["ammo"] / max(1, me.get("maxAmmo", 50))) * 0.5
         if me["hp"] < 50: r -= 5.0
         px, py = me["x"], me["y"]
         n_close = sum(1 for e in st.get("enemies", [])
@@ -289,6 +289,7 @@ class BrowserHeroEnv(gym.Env):
 
 
 # Test the environment
+'''
 if __name__ == "__main__":
     env = BrowserHeroEnv()
     obs, info = env.reset()
@@ -302,3 +303,4 @@ if __name__ == "__main__":
             break
     
     env.close()
+'''
