@@ -113,6 +113,12 @@
                     if (data.playerId === multiplayer.playerId) {
                         multiplayer.playerIndex = data.playerIndex;
                         console.log(`Assigned to player ${data.playerIndex + 1}`);
+                        
+                        // Special handling for training-room
+                        if (multiplayer.roomId === 'training-room' && data.playerIndex === 1) {
+                            console.log('Human player joined training-room as Player 2 (RL agent is host)');
+                            updateStatus('Joined training-room as Player 2 - RL agent is controlling Player 1');
+                        }
                     }
                     
                     updateRoomStatus();
@@ -308,11 +314,13 @@
         }
 
         function handleRLAgentAction(data) {
-            // Handle actions from the RL agent for Player 2
-            const player2 = gameState.players[1];
-            if (player2 && player2.isAIControlled) {
+            // Handle actions from the RL agent - could be Player 1 or Player 2
+            const targetPlayerIndex = data.playerIndex || 0; // Default to Player 1
+            const targetPlayer = gameState.players[targetPlayerIndex];
+            
+            if (targetPlayer && targetPlayer.isAIControlled) {
                 // Store the AI actions to be processed in the next update
-                player2.aiActions = {
+                targetPlayer.aiActions = {
                     vx: data.vx || 0,
                     vy: data.vy || 0,
                     shoot: data.shoot || false,
@@ -322,7 +330,7 @@
                     reload: data.reload || false
                 };
                 
-                console.log('RL Agent action received:', player2.aiActions);
+                console.log(`RL Agent action received for Player ${targetPlayerIndex + 1}:`, targetPlayer.aiActions);
             }
         }
 
@@ -572,11 +580,18 @@
             
             console.log('Creating players at center:', centerX, centerY);
             
+            // Check if we're in training-room to determine AI control
+            const isTrainingRoom = multiplayer.connected && multiplayer.roomId === 'training-room';
+            const isPlayer1 = multiplayer.connected && multiplayer.playerIndex === 0;
+            
             gameState.players.push({
                 id: 1, x: centerX - 50, y: centerY, vx: 0, vy: 0,
                 hp: 300, maxHp: 300, ult: 0, maxUlt: 100, ammo: 50, maxAmmo: 50,
                 score: 0, reloading: false, shield: false, dashCooldown: 0,
-                color: '#4CAF50', size: 20, gunAngle: 0, lastShot: 0
+                color: '#4CAF50', size: 20, gunAngle: 0, lastShot: 0,
+                isAIControlled: isTrainingRoom && !isPlayer1,  // AI-controlled in training-room unless we're Player 1
+                aiActions: null,       // Will store actions from RL agent
+                lastAIAction: 0       // Track last AI action time
             });
             
             gameState.players.push({
@@ -584,7 +599,7 @@
                 hp: 300, maxHp: 300, ult: 0, maxUlt: 100, ammo: 50, maxAmmo: 50,
                 score: 0, reloading: false, shield: false, dashCooldown: 0,
                 color: '#2196F3', size: 20, gunAngle: 0, lastShot: 0,
-                isAIControlled: true,  // Make Player 2 AI-controlled by default
+                isAIControlled: !isTrainingRoom || isPlayer1,  // AI-controlled unless in training-room and we're Player 1
                 aiActions: null,       // Will store actions from RL agent
                 lastAIAction: 0       // Track last AI action time
             });

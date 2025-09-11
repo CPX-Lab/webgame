@@ -312,11 +312,16 @@ function handleWebSocketMessage(playerId, data) {
     case 'playerReady':
       handlePlayerReady(playerId, data.ready);
       break;
+    case 'aiAction':
+      // This indicates an RL agent is sending actions
+      player.isRLAgent = true;
+      handleRLAgentAction(playerId, data);
+      break;
     case 'startRLAgent':
       console.log('Starting RL agent for room:', data.roomId);
       // Start the Python RL agent script
       const { spawn } = require('child_process');
-      const pythonProcess = spawn('python', ['public/train_agent.py'], {
+      const pythonProcess = spawn('bash', ['-c', 'source .venv/bin/activate && python public/train_agent.py'], {
           cwd: __dirname,
           stdio: 'inherit'
       });
@@ -350,9 +355,24 @@ function handleJoinRoom(playerId, roomId) {
     multiplayerState.rooms.set(roomId, room);
   }
   
+  // Special logic for training-room: RL agent should be Player 1 (host)
+  let playerIndex;
+  if (roomId === 'training-room') {
+    // Check if this is an RL agent connection (we'll identify this by checking for AI action messages)
+    // For now, we'll make the first player to join training-room the host
+    if (room.players.size === 0) {
+      playerIndex = 0; // Agent becomes host
+    } else {
+      playerIndex = room.players.size; // Human players get subsequent indices
+    }
+  } else {
+    // Normal room assignment for other rooms
+    playerIndex = room.players.size;
+  }
+  
   // Assign player to room
   player.roomId = roomId;
-  player.playerIndex = room.players.size;
+  player.playerIndex = playerIndex;
   room.players.set(playerId, player);
   
   // Notify all players in room
@@ -473,6 +493,28 @@ function handlePlayerReady(playerId, ready) {
   });
   
   console.log(`Player ${playerId} ${ready ? 'ready' : 'not ready'} (${room.readyPlayers.size}/${room.players.size})`);
+}
+
+function handleRLAgentAction(playerId, data) {
+  const player = multiplayerState.players.get(playerId);
+  if (!player || !player.roomId) return;
+  
+  const room = multiplayerState.rooms.get(player.roomId);
+  if (!room) return;
+  
+  // Broadcast RL agent action to other players in room
+  broadcastToRoom(player.roomId, {
+    type: 'rlAgentAction',
+    playerId: playerId,
+    playerIndex: player.playerIndex,
+    vx: data.vx,
+    vy: data.vy,
+    shoot: data.shoot,
+    dash: data.dash,
+    shield: data.shield,
+    ult: data.ult,
+    reload: data.reload
+  }, playerId); // Exclude sender
 }
 
 function handlePlayerDisconnect(playerId) {
