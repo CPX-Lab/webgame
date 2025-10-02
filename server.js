@@ -433,8 +433,15 @@ function handleGameStartRequest(playerId, roomId) {
   const room = multiplayerState.rooms.get(roomId);
   if (!room) return;
   
-  // Check if all players are ready
-  if (room.readyPlayers.size < room.players.size) {
+  console.log(`Game start requested by player ${playerId} in room ${roomId}`);
+  console.log(`Room state: ${room.readyPlayers.size}/${room.players.size} players ready`);
+  
+  // For training-room, allow restart even if not all players are ready
+  const isTrainingRoom = roomId === 'training-room';
+  
+  // Check if all players are ready (skip for training-room)
+  if (!isTrainingRoom && room.readyPlayers.size < room.players.size) {
+    console.log(`Game start denied: ${room.readyPlayers.size}/${room.players.size} players ready`);
     // Notify the requesting player that not everyone is ready
     player.ws.send(JSON.stringify({
       type: 'gameStartDenied',
@@ -443,11 +450,32 @@ function handleGameStartRequest(playerId, roomId) {
     return;
   }
   
-  // Mark room as started
+  // Reset room state for restart
   room.gameStarted = true;
+  room.gameState = null; // Clear previous game state
+  
+  // Reset player indexes on restart
+  console.log(`Resetting player indexes for room ${roomId}`);
+  let newIndex = 0;
+  for (const [playerId, player] of room.players) {
+    const oldIndex = player.playerIndex;
+    player.playerIndex = newIndex;
+    console.log(`Player ${playerId}: ${oldIndex} -> ${newIndex}`);
+    
+    // Notify the player of their new index
+    player.ws.send(JSON.stringify({
+      type: 'playerIndexUpdate',
+      oldIndex: oldIndex,
+      newIndex: newIndex
+    }));
+    
+    newIndex++;
+  }
   
   // Calculate synchronized start time (3 seconds from now)
   const startTime = Date.now() + 3000;
+  
+  console.log(`Game start approved for room ${roomId}, starting in 3 seconds`);
   
   // Notify all players in the room about the game start request with exact start time
   broadcastToRoom(roomId, {

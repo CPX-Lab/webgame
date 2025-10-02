@@ -4,6 +4,9 @@ function update(deltaTime) {
     // Always update local player input (both players can control their characters)
     updateLocalPlayer(dt);
     
+    // Update AI-controlled players (both in single player and multiplayer)
+    updateAIControlledPlayers(dt);
+    
     // Only update game logic if this is the host (player 0) or single player
     if (!multiplayer.connected || multiplayer.playerIndex === 0) {
         // Update enemies
@@ -204,19 +207,20 @@ function dash(player) {
     }
 }
 
+function updateAIControlledPlayers(dt) {
+    // Update all AI-controlled players
+    gameState.players.forEach((player, index) => {
+        if (player && player.isAIControlled) {
+            updateAIPlayer(player, dt);
+        }
+    });
+}
+
 function updateAIPlayer(player, dt) {
     // RL Agent controls this player
     // Actions are set by the RL agent via WebSocket messages
     
-    // Update position based on velocity set by AI
-    player.x += player.vx * dt;
-    player.y += player.vy * dt;
-    
-    // World bounds
-    player.x = Math.max(player.size, Math.min(gameState.worldSize.w - player.size, player.x));
-    player.y = Math.max(player.size, Math.min(gameState.worldSize.h - player.size, player.y));
-    
-    // Handle AI-requested actions
+    // Handle AI-requested actions first
     if (player.aiActions) {
         // Movement
         if (player.aiActions.vx !== undefined) {
@@ -259,6 +263,24 @@ function updateAIPlayer(player, dt) {
         
         // Clear actions after processing
         player.aiActions = null;
+    }
+    
+    // Update position based on velocity set by AI
+    player.x += player.vx * dt;
+    player.y += player.vy * dt;
+    
+    // World bounds
+    player.x = Math.max(player.size, Math.min(gameState.worldSize.w - player.size, player.x));
+    player.y = Math.max(player.size, Math.min(gameState.worldSize.h - player.size, player.y));
+    
+    // Update cooldowns and timers
+    if (player.dashCooldown > 0) {
+        player.dashCooldown -= dt;
+    }
+    
+    // Ult charge
+    if (player.ult < player.maxUlt) {
+        player.ult += 10 * dt;
     }
     
     // Simple AI behavior when no RL agent is connected

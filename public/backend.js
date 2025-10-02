@@ -11,7 +11,7 @@
         // Multiplayer configuration
         const multiplayer = {
             enabled: true,
-            wsUrl: `ws://${window.location.host}`,
+            wsUrl: `ws://localhost:8787`,
             playerId: null,
             roomId: null,
             playerIndex: null,
@@ -40,6 +40,9 @@
             canvas = document.getElementById('canvas');
             ctx = canvas.getContext('2d');
             
+            // Clear all player data on page load
+            clearPlayerData();
+            
             loadFromStorage();
             setupEventListeners();
             setupMultiplayer();
@@ -67,8 +70,11 @@
                 multiplayer.ws.onopen = () => {
                     console.log('WebSocket connected');
                     multiplayer.connected = true;
-                    updateStatus('Connected to server - Create or join a room');
+                    updateStatus('Connected to server - Auto-joining training-room');
                     updateConnectionStatus('Connected', '#4CAF50');
+                    
+                    // Auto-join training-room on connection
+                    joinRoom('training-room');
                 };
                 
                 multiplayer.ws.onmessage = (event) => {
@@ -142,6 +148,12 @@
                     handleRLAgentAction(data);
                     break;
                     
+                case 'playerIndexUpdate':
+                    console.log(`Player index updated: ${data.oldIndex} -> ${data.newIndex}`);
+                    multiplayer.playerIndex = data.newIndex;
+                    updateStatus(`Player index reset to ${data.newIndex + 1}`);
+                    break;
+                    
                 
 
                 case 'gameState':
@@ -178,6 +190,7 @@
                         roomStatus.textContent = `Room: ${multiplayer.roomId} (${playerCount} players, ${data.readyCount} ready)`;
                     }
                     break;
+                    
             }
         }
 
@@ -314,9 +327,15 @@
         }
 
         function handleRLAgentAction(data) {
-            // Handle actions from the RL agent - could be Player 1 or Player 2
-            const targetPlayerIndex = data.playerIndex || 0; // Default to Player 1
+            // Handle actions from the RL agent - use the playerIndex from server
+            const targetPlayerIndex = data.playerIndex;
             const targetPlayer = gameState.players[targetPlayerIndex];
+            
+            console.log(`RL Agent action received for Player ${targetPlayerIndex + 1}:`, {
+                playerIndex: targetPlayerIndex,
+                isAIControlled: targetPlayer ? targetPlayer.isAIControlled : 'player not found',
+                actions: data
+            });
             
             if (targetPlayer && targetPlayer.isAIControlled) {
                 // Store the AI actions to be processed in the next update
@@ -330,7 +349,9 @@
                     reload: data.reload || false
                 };
                 
-                console.log(`RL Agent action received for Player ${targetPlayerIndex + 1}:`, targetPlayer.aiActions);
+                console.log(`✅ AI actions applied to Player ${targetPlayerIndex + 1}:`, targetPlayer.aiActions);
+            } else {
+                console.log(`❌ Player ${targetPlayerIndex + 1} is not AI-controlled or doesn't exist`);
             }
         }
 
@@ -536,7 +557,27 @@
         }
 
         function startGame() {
-            console.log('startGame called');
+            console.log('startGame called, current state:', {
+                running: gameState.running,
+                connected: multiplayer.connected,
+                roomId: multiplayer.roomId,
+                playerIndex: multiplayer.playerIndex
+            });
+            
+            // Force stop any running game first and clear player data
+            if (gameState.running) {
+                console.log('Stopping current game before restart');
+                gameState.running = false;
+                gameState.paused = false;
+            }
+            
+            // Clear player data on restart
+            console.log('🧹 Clearing player data on restart');
+            multiplayer.ready = false;
+            multiplayer.roomPlayers.clear();
+            multiplayer.inputQueue = [];
+            multiplayer.lastInputSent = 0;
+            gameState.playerAssignments = { player1: null, player2: null };
             
             // If no room is set, automatically join training-room
             if (multiplayer.connected && !multiplayer.roomId) {
@@ -550,6 +591,7 @@
             }
             // If in multiplayer, request synchronized start
             if (multiplayer.connected && multiplayer.roomId) {
+                console.log('Requesting synchronized game start for room:', multiplayer.roomId);
                 multiplayer.ws.send(JSON.stringify({
                     type: 'requestGameStart',
                     roomId: multiplayer.roomId
@@ -559,6 +601,7 @@
             }
             
             // Single player or host starts immediately
+            console.log('Starting game immediately (single player or host)');
             startGameInternal();
         }
 
@@ -604,7 +647,12 @@
                 lastAIAction: 0       // Track last AI action time
             });
             
-            console.log('Players spawned:', gameState.players);
+            console.log('Players spawned:', gameState.players.map((p, i) => ({
+                index: i,
+                id: p.id,
+                isAIControlled: p.isAIControlled,
+                position: {x: p.x, y: p.y}
+            })));
             console.log('World size:', gameState.worldSize);
             console.log('Canvas size:', canvas.width, canvas.height);
             
@@ -899,6 +947,40 @@
             
             html += '</table>';
             content.innerHTML = html;
+        }
+
+        function clearPlayerData() {
+            console.log('🧹 Clearing all player data on page load');
+            
+            // Reset multiplayer state
+            multiplayer.playerId = null;
+            multiplayer.roomId = null;
+            multiplayer.playerIndex = null;
+            multiplayer.connected = false;
+            multiplayer.ready = false;
+            multiplayer.roomPlayers.clear();
+            multiplayer.inputQueue = [];
+            multiplayer.lastInputSent = 0;
+            
+            // Reset game state
+            gameState.running = false;
+            gameState.paused = false;
+            gameState.wave = 1;
+            gameState.score = 0;
+            gameState.teamScore = 0;
+            gameState.players = [];
+            gameState.enemies = [];
+            gameState.bullets = [];
+            gameState.effects = [];
+            gameState.objectives = [];
+            gameState.playerAssignments = { player1: null, player2: null };
+            
+            // Clear input state
+            gameState.keys = {};
+            gameState.gamepads = {};
+            gameState.lastTime = 0;
+            
+            console.log('✅ Player data cleared');
         }
 
         function clearLocalScores() {

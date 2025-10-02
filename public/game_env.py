@@ -59,7 +59,7 @@ class BrowserHeroEnv(gym.Env):
 
         # Async bridge
         self._state_q: queue.Queue = queue.Queue(maxsize=1)
-        self._action_q: queue.Queue = queue.Queue(maxsize=1)
+        self._action_q: queue.Queue = queue.Queue(maxsize=1)  # Keep at 1 to prevent lag - only latest action matters
         self._stop = threading.Event()
         self._ws_thread: Optional[threading.Thread] = None
 
@@ -82,47 +82,72 @@ class BrowserHeroEnv(gym.Env):
         asyncio.run(self._ws_main())
 
     async def _ws_main(self):
-        try:
-            async with websockets.connect(self.server_url) as ws:
-                # Wait for playerId
-                self._player_id = await self._await_player_id(ws)
-                # Join room
-                await ws.send(json.dumps({"type": "joinRoom", "roomId": self.room_id}))
+        while not self._stop.is_set():
+            try:
+                print(f"🔌 Connecting to {self.server_url}...")
+                async with websockets.connect(self.server_url) as ws:
+                    print("✅ WebSocket connected successfully")
+                    
+                    # Wait for playerId
+                    self._player_id = await self._await_player_id(ws)
+                    # Join room
+                    await ws.send(json.dumps({"type": "joinRoom", "roomId": self.room_id}))
 
-                async def reader():
-                    async for msg in ws:
-                        try:
-                            data = json.loads(msg)
-                        except json.JSONDecodeError:
-                            continue
-                        if data.get("type") == "gameState":
-                            st = data.get("state", {})
-                            print(f"Received gameState with {len(st.get('players', []))} players")
+                    async def reader():
+                        async for msg in ws:
                             try:
-                                self._state_q.put_nowait(st)
-                            except queue.Full:
+                                data = json.loads(msg)
+                            except json.JSONDecodeError:
+                                continue
+                            if data.get("type") == "gameState":
+                                st = data.get("state", {})
+                                print(f"Received gameState with {len(st.get('players', []))} players")
                                 try:
-                                    _ = self._state_q.get_nowait()
-                                except queue.Empty:
-                                    pass
-                                self._state_q.put_nowait(st)
-                        elif data.get("type") == "playerId":
-                            self._player_id = data.get("playerId", self._player_id)
+                                    self._state_q.put_nowait(st)
+                                except queue.Full:
+                                    try:
+                                        _ = self._state_q.get_nowait()
+                                    except queue.Empty:
+                                        pass
+                                    self._state_q.put_nowait(st)
+                            elif data.get("type") == "playerId":
+                                self._player_id = data.get("playerId", self._player_id)
+                            elif data.get("type") == "playerJoined":
+                                # Store our player index when we join
+                                if data.get("playerId") == self._player_id:
+                                    self._player_index = data.get("playerIndex")
+                                    print(f"Received playerId: {self._player_id}")
+                            elif data.get("type") == "playerIndexUpdate":
+                                # Handle player index reset on game restart
+                                old_index = self._player_index
+                                self._player_index = data.get("newIndex")
+                                print(f"🔄 PLAYER INDEX UPDATE: {old_index} -> {self._player_index}")
+                                print(f"Full message: {data}")
 
-                async def writer():
-                    loop = asyncio.get_event_loop()
-                    while not self._stop.is_set():
-                        try:
-                            action = await loop.run_in_executor(None, self._action_q.get)
-                            await ws.send(json.dumps(action))
-                        except Exception:
-                            await asyncio.sleep(0.01)
+                    async def writer():
+                        loop = asyncio.get_event_loop()
+                        while not self._stop.is_set():
+                            try:
+                                queue_size = self._action_q.qsize()
+                                print(f"🔴 WRITER: Queue size: {queue_size}, waiting for action...")
+                                action = await loop.run_in_executor(None, self._action_q.get)
+                                print(f"🔴 WRITER: Got action from queue: {action}")
+                                await ws.send(json.dumps(action))
+                                print(f"✅ WRITER: Action sent successfully")
+                            except Exception as e:
+                                print(f"❌ WRITER ERROR: {e}")
+                                await asyncio.sleep(0.01)
 
-                await asyncio.gather(reader(), writer())
-        except Exception as e:
-            # If connection dies, env.step/reset will time out (handled below)
-            print(f"Websocket connection error: {e}")
-            pass
+                    await asyncio.gather(reader(), writer())
+                    
+            except Exception as e:
+                print(f"🔌 WebSocket connection error: {e}")
+                if not self._stop.is_set():
+                    print("🔄 Reconnecting in 3 seconds...")
+                    await asyncio.sleep(3)
+                else:
+                    print("🛑 Stop signal received, not reconnecting")
+                    break
 
     async def _await_player_id(self, ws) -> str:
         deadline = time.time() + self.connect_timeout_sec
@@ -220,7 +245,7 @@ class BrowserHeroEnv(gym.Env):
         r += 1.0
         r += (me["hp"] / max(1, me.get("maxHp", 100))) * 2.0
         r += me.get("score", 0) * 0.1
-        r += (me["ammo"] / max(1, me.get("maxAmmo", 50))) * 0.5
+        # r += (me["ammo"] / max(1, me.get("maxAmmo", 50))) * 0.5
         if me["hp"] < 50: r -= 5.0
         px, py = me["x"], me["y"]
         n_close = sum(1 for e in st.get("enemies", [])
@@ -232,8 +257,9 @@ class BrowserHeroEnv(gym.Env):
     def reset(self, seed: Optional[int] = None, options: Optional[dict] = None) -> Tuple[np.ndarray, dict]:
         super().reset(seed=seed)
         self._step_count = 0
-        # Optional: tell server to reset if supported
-        # self._put_action({"type": "reset"})
+        # Tell server to reset the game
+        self._put_action({"type": "reset"})
+        print("🔄 RL Agent requested game reset")
         raw = self._get_next_state_or_timeout(self.step_timeout_sec, raise_on_timeout=True)
         self._last_raw_state = raw
         obs = self._to_obs(raw)
@@ -242,8 +268,10 @@ class BrowserHeroEnv(gym.Env):
     def step(self, action):
         self._step_count += 1
         a = np.asarray(action, dtype=np.float32).ravel()
+        # RL agent should always control Player 1 (index 0) in training room
         msg = {
             "type": "aiAction",
+            "playerIndex": 0,  # Always Player 1 (index 0)
             "vx": float(a[0]),
             "vy": float(a[1]),
             "shoot":  bool(a[2] > 0.5),
@@ -252,6 +280,7 @@ class BrowserHeroEnv(gym.Env):
             "ult":    bool(a[5] > 0.5),
             "reload": bool(a[6] > 0.5),
         }
+        print(f"🎯 SENDING ACTION with playerIndex: 0 (always Player 1)")
         self._put_action(msg)
         raw = self._get_next_state_or_timeout(self.step_timeout_sec, raise_on_timeout=False)
         if raw is None:
@@ -265,14 +294,21 @@ class BrowserHeroEnv(gym.Env):
         return obs, rew, done, False, {}
 
     def _put_action(self, action):
+        queue_size = self._action_q.qsize()
+        print(f"🟡 PUT_ACTION: Queue size: {queue_size}, Putting action: {action}")
         try:
             self._action_q.put_nowait(action)
+            print(f"✅ PUT_ACTION: Action queued successfully (queue size now: {self._action_q.qsize()})")
         except queue.Full:
+            print(f"⚠️ PUT_ACTION: Queue full (size: {queue_size}), removing old action")
             try:
-                _ = self._action_q.get_nowait()
+                old_action = self._action_q.get_nowait()
+                print(f"🗑️ PUT_ACTION: Removed old action: {old_action}")
             except queue.Empty:
+                print(f"❌ PUT_ACTION: Queue was full but now empty - race condition!")
                 pass
             self._action_q.put_nowait(action)
+            print(f"✅ PUT_ACTION: Action queued after clearing queue (queue size now: {self._action_q.qsize()})")
 
     def _get_next_state_or_timeout(self, timeout_sec: float, raise_on_timeout: bool = False):
         try:
