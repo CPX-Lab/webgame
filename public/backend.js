@@ -154,6 +154,18 @@
                     updateStatus(`Player index reset to ${data.newIndex + 1}`);
                     break;
                     
+                case 'roomCleared':
+                    console.log('Room cleared - rejoining...');
+                    updateStatus('Room cleared - rejoining...');
+                    // Clear local state
+                    multiplayer.playerIndex = null;
+                    multiplayer.roomPlayers.clear();
+                    // Automatically rejoin training-room
+                    setTimeout(() => {
+                        joinRoom('training-room');
+                    }, 500);
+                    break;
+                    
                 
 
                 case 'gameState':
@@ -409,27 +421,26 @@
         }
 
         function createRoom() {
-            if (multiplayer.connected && multiplayer.ws) {
-                multiplayer.ws.send(JSON.stringify({
-                    type: 'createRoom'
-                }));
-                updateStatus('Creating room...');
-                // Show ready button when creating room
-                const readyButton = document.getElementById('readyButton');
-                if (readyButton) {
-                    readyButton.style.display = 'block';
-                }
-            }
+            // Always join training-room
+            joinRoom('training-room');
         }
 
         function joinRoom(roomId) {
+            // Only allow training-room
+            if (roomId && roomId !== 'training-room') {
+                updateStatus('Only training-room is available');
+                return;
+            }
+            
+            const targetRoom = roomId || 'training-room';
+            
             if (multiplayer.connected && multiplayer.ws) {
-                multiplayer.roomId = roomId;
+                multiplayer.roomId = targetRoom;
                 multiplayer.ws.send(JSON.stringify({
                     type: 'joinRoom',
-                    roomId: roomId
+                    roomId: targetRoom
                 }));
-                updateStatus('Joining room...');
+                updateStatus('Joining training-room...');
                 // Show ready button when joining room
                 const readyButton = document.getElementById('readyButton');
                 if (readyButton) {

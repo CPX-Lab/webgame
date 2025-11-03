@@ -190,12 +190,10 @@
     <div class="panel" id="multiplayerPanel" style="left: 10px; top: 350px; width: 200px;">
         <h3>Multiplayer</h3>
         <div id="multiplayerContent">
-            <div class="input-group">
-                <label>Room ID:</label>
-                <input type="text" id="roomIdInput" placeholder="Enter room ID">
+            <div style="margin-bottom: 10px; font-size: 11px; color: #888;">
+                All players join training-room
             </div>
-            <button class="button" onclick="createRoom()">Create Room</button>
-            <button class="button" onclick="joinRoom(document.getElementById('roomIdInput').value)">Join Room</button>
+            <button class="button" onclick="joinRoom('training-room')">Join Training Room</button>
             <button class="button" id="readyButton" onclick="toggleReady()" style="display: none; background: #4CAF50; color: white; margin-top: 10px; padding: 8px 15px; font-weight: bold; border: 2px solid #45a049;">Ready</button>
             <div id="connectionStatus" style="margin-top: 10px; font-size: 10px; color: #888;">
                 Not Connected

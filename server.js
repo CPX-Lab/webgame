@@ -454,23 +454,24 @@ function handleGameStartRequest(playerId, roomId) {
   room.gameStarted = true;
   room.gameState = null; // Clear previous game state
   
-  // Reset player indexes on restart
-  console.log(`Resetting player indexes for room ${roomId}`);
-  let newIndex = 0;
+  // Clear all players from the room - they will need to rejoin
+  console.log(`Clearing all players from room ${roomId} on restart`);
+  const previousPlayerCount = room.players.size;
+  
+  // Notify all players that were in the room that they need to rejoin
+  // (Do this before clearing so we can still access the player list)
   for (const [playerId, player] of room.players) {
-    const oldIndex = player.playerIndex;
-    player.playerIndex = newIndex;
-    console.log(`Player ${playerId}: ${oldIndex} -> ${newIndex}`);
-    
-    // Notify the player of their new index
     player.ws.send(JSON.stringify({
-      type: 'playerIndexUpdate',
-      oldIndex: oldIndex,
-      newIndex: newIndex
+      type: 'roomCleared',
+      message: 'Room cleared - please rejoin'
     }));
-    
-    newIndex++;
   }
+  
+  // Now clear the players and ready players
+  room.players.clear();
+  room.readyPlayers.clear();
+  
+  console.log(`Cleared ${previousPlayerCount} players from room ${roomId}`);
   
   // Calculate synchronized start time (3 seconds from now)
   const startTime = Date.now() + 3000;
