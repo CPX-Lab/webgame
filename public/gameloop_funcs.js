@@ -43,7 +43,9 @@ function update(deltaTime) {
 function updatePlayers(dt) {
     // Update Player 1 (index 0) - only responds to WASD controls
     const player1 = gameState.players[0];
-    if (player1) {
+    if (player1 && !player1.isAIControlled) {
+        // Skip if AI-controlled (handled by updateAIControlledPlayers)
+        
         const controls = { 
             up: 'w', down: 's', left: 'a', right: 'd', 
             shoot: 'f', dash: 'shift', shield: 'e', ult: 'q', reload: 'r' 
@@ -222,9 +224,9 @@ function updateAIPlayer(player, dt) {
     
     // Handle AI-requested actions first
     if (player.aiActions) {
-        // Movement
+        // Movement - update velocity from AI actions
         if (player.aiActions.vx !== undefined) {
-            player.vx = player.aiActions.vx * 200; // Scale to game speed
+            player.vx = player.aiActions.vx * 200; // Scale to game speed (vx is -1 to 1, scale to -200 to 200)
         }
         if (player.aiActions.vy !== undefined) {
             player.vy = player.aiActions.vy * 200; // Scale to game speed
@@ -261,11 +263,12 @@ function updateAIPlayer(player, dt) {
             }, 1000);
         }
         
-        // Clear actions after processing
+        // Clear actions after processing (velocity persists)
         player.aiActions = null;
     }
+    // Note: Velocity persists even after aiActions is cleared, so player continues moving
     
-    // Update position based on velocity set by AI
+    // Update position based on velocity set by AI (or previous velocity if no new action)
     player.x += player.vx * dt;
     player.y += player.vy * dt;
     
@@ -343,17 +346,54 @@ function updateLocalPlayer(dt) {
     
     // Multiplayer mode - only update the local player
     const localPlayerIndex = multiplayer.playerIndex;
-    if (localPlayerIndex === undefined || localPlayerIndex >= gameState.players.length) {
+    
+    // Debug: Log player index issue
+    if (Math.random() < 0.05) {
+        console.log(`🔍 updateLocalPlayer check: localPlayerIndex=${localPlayerIndex}, connected=${multiplayer.connected}, players.length=${gameState.players.length}`);
+    }
+    
+    if (localPlayerIndex === undefined || localPlayerIndex === null || localPlayerIndex >= gameState.players.length) {
+        // Log only occasionally to avoid spam
+        if (Math.random() < 0.05) {
+            console.log(`❌ updateLocalPlayer: Invalid playerIndex=${localPlayerIndex}, players.length=${gameState.players.length}, connected=${multiplayer.connected}`);
+        }
         return;
     }
     
     const localPlayer = gameState.players[localPlayerIndex];
-    if (!localPlayer) return;
+    if (!localPlayer) {
+        if (Math.random() < 0.01) {
+            console.log(`❌ updateLocalPlayer: Player at index ${localPlayerIndex} doesn't exist`);
+        }
+        return;
+    }
+    
+    // Skip if this player is AI-controlled (AI actions are handled in updateAIControlledPlayers)
+    if (localPlayer.isAIControlled) {
+        if (Math.random() < 0.01 && localPlayerIndex === 0) {
+            console.log(`⚠️ updateLocalPlayer: Player ${localPlayerIndex + 1} (index 0) is marked as AI-controlled but should be human`);
+        }
+        return;
+    }
     
     // Define controls based on player index
-    const controls = localPlayerIndex === 0 ? 
-        { up: 'w', down: 's', left: 'a', right: 'd', shoot: 'f', dash: 'shift', shield: 'e', ult: 'q', reload: 'r' } :
-        { up: 'i', down: 'k', left: 'j', right: 'l', shoot: 'h', dash: 'o', shield: 'u', ult: 'p', reload: 'semicolon' };
+    // Index 0 is human player (WASD controls)
+    // Index 1 is RL agent (AI-controlled, no keyboard controls)
+    let controls;
+    if (localPlayerIndex === 0) {
+        // Index 0: WASD controls (human player)
+        controls = { up: 'w', down: 's', left: 'a', right: 'd', shoot: 'f', dash: 'shift', shield: 'e', ult: 'q', reload: 'r' };
+    } else {
+        // Index 1+: Other controls (unused since index 1 is AI-controlled)
+        controls = { up: 'i', down: 'k', left: 'j', right: 'l', shoot: 'h', dash: 'o', shield: 'u', ult: 'p', reload: 'semicolon' };
+    }
+    
+    // Debug logging - make it more visible
+    if (Math.random() < 0.05) { // Log 5% of the time
+        console.log(`🎮 updateLocalPlayer: playerIndex=${localPlayerIndex}, isAIControlled=${localPlayer.isAIControlled}, controls=${controls.up}/${controls.down}/${controls.left}/${controls.right}`);
+        console.log(`   Keys: w=${gameState.keys['w']}, s=${gameState.keys['s']}, a=${gameState.keys['a']}, d=${gameState.keys['d']}`);
+        console.log(`   Player pos: (${localPlayer.x.toFixed(1)}, ${localPlayer.y.toFixed(1)}), vel: (${localPlayer.vx.toFixed(1)}, ${localPlayer.vy.toFixed(1)})`);
+    }
     
     // Movement
     let vx = 0, vy = 0;
@@ -373,9 +413,24 @@ function updateLocalPlayer(dt) {
     localPlayer.vx = vx;
     localPlayer.vy = vy;
     
-    // Update position
-    localPlayer.x += localPlayer.vx * dt;
-    localPlayer.y += localPlayer.vy * dt;
+    // Log when WASD keys are pressed and movement happens
+    if ((vx !== 0 || vy !== 0) && localPlayerIndex >= 1) {
+        const oldX = localPlayer.x;
+        const oldY = localPlayer.y;
+        
+        // Update position
+        localPlayer.x += localPlayer.vx * dt;
+        localPlayer.y += localPlayer.vy * dt;
+        
+        // Log movement (only occasionally to avoid spam)
+        if (Math.random() < 0.1) {
+            console.log(`🎮 WASD Movement: Player ${localPlayerIndex + 1} moved from (${oldX.toFixed(1)}, ${oldY.toFixed(1)}) to (${localPlayer.x.toFixed(1)}, ${localPlayer.y.toFixed(1)}), vx=${vx.toFixed(1)}, vy=${vy.toFixed(1)}`);
+        }
+    } else {
+        // Update position even when not moving (for consistency)
+        localPlayer.x += localPlayer.vx * dt;
+        localPlayer.y += localPlayer.vy * dt;
+    }
     
     // World bounds
     localPlayer.x = Math.max(localPlayer.size, Math.min(gameState.worldSize.w - localPlayer.size, localPlayer.x));

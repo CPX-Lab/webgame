@@ -315,6 +315,15 @@ function handleWebSocketMessage(playerId, data) {
     case 'aiAction':
       // This indicates an RL agent is sending actions
       player.isRLAgent = true;
+      console.log(`🤖 Received AI action from player ${playerId} (playerIndex: ${data.playerIndex}):`, {
+        vx: data.vx,
+        vy: data.vy,
+        shoot: data.shoot,
+        dash: data.dash,
+        shield: data.shield,
+        ult: data.ult,
+        reload: data.reload
+      });
       handleRLAgentAction(playerId, data);
       break;
     case 'startRLAgent':
@@ -355,15 +364,14 @@ function handleJoinRoom(playerId, roomId) {
     multiplayerState.rooms.set(roomId, room);
   }
   
-  // Special logic for training-room: RL agent should be Player 1 (host)
+  // Special logic for training-room: Human gets index 0, RL agent gets index 1
   let playerIndex;
   if (roomId === 'training-room') {
-    // Check if this is an RL agent connection (we'll identify this by checking for AI action messages)
-    // For now, we'll make the first player to join training-room the host
+    // First player to join gets index 0 (human), second player gets index 1 (RL agent)
     if (room.players.size === 0) {
-      playerIndex = 0; // Agent becomes host
+      playerIndex = 0; // First player (human) gets index 0
     } else {
-      playerIndex = room.players.size; // Human players get subsequent indices
+      playerIndex = 1; // Second player (RL agent) always gets index 1
     }
   } else {
     // Normal room assignment for other rooms
@@ -526,16 +534,29 @@ function handlePlayerReady(playerId, ready) {
 
 function handleRLAgentAction(playerId, data) {
   const player = multiplayerState.players.get(playerId);
-  if (!player || !player.roomId) return;
+  if (!player || !player.roomId) {
+    console.log(`❌ handleRLAgentAction: Player ${playerId} not found or not in room`);
+    return;
+  }
   
   const room = multiplayerState.rooms.get(player.roomId);
-  if (!room) return;
+  if (!room) {
+    console.log(`❌ handleRLAgentAction: Room not found for player ${playerId}`);
+    return;
+  }
   
-  // Broadcast RL agent action to other players in room
+  // Use the playerIndex from the data (agent sends it) or fall back to player.playerIndex
+  const targetPlayerIndex = data.playerIndex !== undefined ? data.playerIndex : player.playerIndex;
+  
+  console.log(`📡 Broadcasting RL agent action to room ${player.roomId} (${room.players.size} players total)`);
+  console.log(`   Target playerIndex: ${targetPlayerIndex}, Agent playerIndex: ${player.playerIndex}`);
+  
+  // Broadcast RL agent action to ALL players in room (including sender, so browser receives it)
+  // The browser will filter based on playerIndex and isAIControlled
   broadcastToRoom(player.roomId, {
     type: 'rlAgentAction',
     playerId: playerId,
-    playerIndex: player.playerIndex,
+    playerIndex: targetPlayerIndex,
     vx: data.vx,
     vy: data.vy,
     shoot: data.shoot,
@@ -543,7 +564,9 @@ function handleRLAgentAction(playerId, data) {
     shield: data.shield,
     ult: data.ult,
     reload: data.reload
-  }, playerId); // Exclude sender
+  }); // Don't exclude sender - browser needs to receive it
+  
+  console.log(`✅ RL agent action broadcasted successfully to all ${room.players.size} players`);
 }
 
 function handlePlayerDisconnect(playerId) {

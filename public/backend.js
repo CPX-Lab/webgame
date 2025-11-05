@@ -118,12 +118,16 @@
                     // Assign this player to their character
                     if (data.playerId === multiplayer.playerId) {
                         multiplayer.playerIndex = data.playerIndex;
-                        console.log(`Assigned to player ${data.playerIndex + 1}`);
+                        console.log(`✅ ASSIGNED PLAYER INDEX: ${data.playerIndex} (Player ${data.playerIndex + 1})`);
+                        console.log(`   Room: ${multiplayer.roomId}, Training Room: ${multiplayer.roomId === 'training-room'}`);
                         
                         // Special handling for training-room
-                        if (multiplayer.roomId === 'training-room' && data.playerIndex === 1) {
-                            console.log('Human player joined training-room as Player 2 (RL agent is host)');
-                            updateStatus('Joined training-room as Player 2 - RL agent is controlling Player 1');
+                        if (multiplayer.roomId === 'training-room' && data.playerIndex === 0) {
+                            console.log('✅ Human player joined training-room as Player 1 (index 0) - WASD controls');
+                            updateStatus('Joined training-room as Player 1 - Use WASD to control');
+                        } else if (multiplayer.roomId === 'training-room' && data.playerIndex === 1) {
+                            console.log('✅ RL agent joined training-room as Player 2 (index 1) - AI controlled');
+                            updateStatus('RL agent connected as Player 2');
                         }
                     }
                     
@@ -316,12 +320,22 @@
                             const localPlayer = gameState.players[index];
                             // Update health, score, ammo, etc. but preserve position if this is local player
                             if (index === multiplayer.playerIndex) {
-                                // For local player, only update non-position data
+                                // For local player, only update non-position data (preserve position from local input)
+                                const oldX = localPlayer.x;
+                                const oldY = localPlayer.y;
                                 localPlayer.hp = remotePlayer.hp;
                                 localPlayer.score = remotePlayer.score;
                                 localPlayer.ammo = remotePlayer.ammo;
                                 localPlayer.ult = remotePlayer.ult;
                                 localPlayer.shield = remotePlayer.shield;
+                                
+                                // Debug: Warn if position was accidentally overwritten
+                                if (oldX !== localPlayer.x || oldY !== localPlayer.y) {
+                                    console.warn(`⚠️ Position was overwritten! Local player ${index} position changed from (${oldX}, ${oldY}) to (${localPlayer.x}, ${localPlayer.y})`);
+                                    // Restore position
+                                    localPlayer.x = oldX;
+                                    localPlayer.y = oldY;
+                                }
                             } else {
                                 // For remote players, update everything
                                 localPlayer.x = remotePlayer.x;
@@ -346,10 +360,26 @@
             console.log(`RL Agent action received for Player ${targetPlayerIndex + 1}:`, {
                 playerIndex: targetPlayerIndex,
                 isAIControlled: targetPlayer ? targetPlayer.isAIControlled : 'player not found',
+                isTrainingRoom: multiplayer.connected && multiplayer.roomId === 'training-room',
                 actions: data
             });
             
-            if (targetPlayer && targetPlayer.isAIControlled) {
+            if (!targetPlayer) {
+                console.log(`❌ Player ${targetPlayerIndex + 1} doesn't exist yet`);
+                return;
+            }
+            
+            // In training-room, Player 1 (index 1) should always accept AI actions
+            const isTrainingRoom = multiplayer.connected && multiplayer.roomId === 'training-room';
+            const shouldAcceptActions = targetPlayer.isAIControlled || (isTrainingRoom && targetPlayerIndex === 1);
+            
+            if (shouldAcceptActions) {
+                // Ensure player is marked as AI-controlled if it isn't already
+                if (!targetPlayer.isAIControlled) {
+                    console.log(`⚠️ Player ${targetPlayerIndex + 1} was not marked AI-controlled, fixing now...`);
+                    targetPlayer.isAIControlled = true;
+                }
+                
                 // Store the AI actions to be processed in the next update
                 targetPlayer.aiActions = {
                     vx: data.vx || 0,
@@ -363,7 +393,7 @@
                 
                 console.log(`✅ AI actions applied to Player ${targetPlayerIndex + 1}:`, targetPlayer.aiActions);
             } else {
-                console.log(`❌ Player ${targetPlayerIndex + 1} is not AI-controlled or doesn't exist`);
+                console.log(`❌ Player ${targetPlayerIndex + 1} is not AI-controlled (isAIControlled: ${targetPlayer.isAIControlled}, isTrainingRoom: ${isTrainingRoom})`);
             }
         }
 
@@ -636,14 +666,14 @@
             
             // Check if we're in training-room to determine AI control
             const isTrainingRoom = multiplayer.connected && multiplayer.roomId === 'training-room';
-            const isPlayer1 = multiplayer.connected && multiplayer.playerIndex === 0;
             
+            // In training-room: Player 0 (index 0) is human-controlled, Player 1 (index 1) is AI-controlled (RL agent)
             gameState.players.push({
                 id: 1, x: centerX - 50, y: centerY, vx: 0, vy: 0,
                 hp: 300, maxHp: 300, ult: 0, maxUlt: 100, ammo: 50, maxAmmo: 50,
                 score: 0, reloading: false, shield: false, dashCooldown: 0,
                 color: '#4CAF50', size: 20, gunAngle: 0, lastShot: 0,
-                isAIControlled: isTrainingRoom && !isPlayer1,  // AI-controlled in training-room unless we're Player 1
+                isAIControlled: false,  // Player 0 is ALWAYS human in training-room
                 aiActions: null,       // Will store actions from RL agent
                 lastAIAction: 0       // Track last AI action time
             });
@@ -653,7 +683,7 @@
                 hp: 300, maxHp: 300, ult: 0, maxUlt: 100, ammo: 50, maxAmmo: 50,
                 score: 0, reloading: false, shield: false, dashCooldown: 0,
                 color: '#2196F3', size: 20, gunAngle: 0, lastShot: 0,
-                isAIControlled: !isTrainingRoom || isPlayer1,  // AI-controlled unless in training-room and we're Player 1
+                isAIControlled: isTrainingRoom,  // Player 1 is AI in training-room (RL agent)
                 aiActions: null,       // Will store actions from RL agent
                 lastAIAction: 0       // Track last AI action time
             });

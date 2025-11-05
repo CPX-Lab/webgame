@@ -197,11 +197,13 @@ class BrowserHeroEnv(gym.Env):
         if not ps:
             return None
         if self._player_id is None:
-            return ps[0]
+            # In training-room, agent is Player 2 (index 1)
+            return ps[1] if len(ps) > 1 else ps[0]
         for p in ps:
             if p.get("id") == self._player_id:
                 return p
-        return ps[0]
+        # In training-room, agent is Player 2 (index 1), default to that if not found
+        return ps[1] if len(ps) > 1 else ps[0]
 
     def _to_obs(self, st: dict) -> np.ndarray:
         me = self._extract_me(st)
@@ -268,10 +270,10 @@ class BrowserHeroEnv(gym.Env):
     def step(self, action):
         self._step_count += 1
         a = np.asarray(action, dtype=np.float32).ravel()
-        # RL agent should always control Player 1 (index 0) in training room
+        # RL agent should always control Player 2 (index 1) in training room
         msg = {
             "type": "aiAction",
-            "playerIndex": 0,  # Always Player 1 (index 0)
+            "playerIndex": 1,  # Always Player 2 (index 1)
             "vx": float(a[0]),
             "vy": float(a[1]),
             "shoot":  bool(a[2] > 0.5),
@@ -280,7 +282,7 @@ class BrowserHeroEnv(gym.Env):
             "ult":    bool(a[5] > 0.5),
             "reload": bool(a[6] > 0.5),
         }
-        print(f"🎯 SENDING ACTION with playerIndex: 0 (always Player 1)")
+        print(f"🎯 SENDING ACTION with playerIndex: 1 (always Player 2)")
         self._put_action(msg)
         raw = self._get_next_state_or_timeout(self.step_timeout_sec, raise_on_timeout=False)
         if raw is None:

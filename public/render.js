@@ -34,10 +34,15 @@ function render() {
     ctx.arc(canvas.width/2, canvas.height/2, 30, 0, Math.PI * 2);
     ctx.fill();
     
-    // Debug info (only log occasionally)
+    // Debug info - show player positions and state
     if (gameState.running && Math.random() < 0.01) {
         console.log('Camera:', gameState.camera);
         console.log('Players:', gameState.players.length);
+        if (gameState.players.length > 0) {
+            gameState.players.forEach((p, i) => {
+                console.log(`Player ${i}: pos=(${p.x.toFixed(1)}, ${p.y.toFixed(1)}), vx=${p.vx.toFixed(1)}, vy=${p.vy.toFixed(1)}, isAI=${p.isAIControlled}, myPlayerIndex=${multiplayer.playerIndex}, connected=${multiplayer.connected}`);
+            });
+        }
     }
     
     // Restore context
