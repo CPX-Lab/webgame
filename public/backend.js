@@ -417,6 +417,7 @@
                         reloading: p.reloading, dashCooldown: p.dashCooldown
                     })),
                     enemies: gameState.enemies,
+                    enemyCount: gameState.enemies.length,
                     bullets: gameState.bullets,
                     effects: gameState.effects,
                     wave: gameState.wave,

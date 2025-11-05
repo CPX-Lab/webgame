@@ -42,10 +42,10 @@ class BrowserHeroEnv(gym.Env):
         self.connect_timeout_sec = connect_timeout_sec
         self.max_episode_steps = max_episode_steps
 
-        # Observation: your 11-D vector
+        # Observation: 12-D vector (added enemyCount)
         self.observation_space = spaces.Box(
-            low=np.array([0, 0, 0, 0, 0, 0, -1, -1, 0, -1, -1], dtype=np.float32),
-            high=np.array([1, 1, 1, 1, 1, 1,  1,  1, 1,  1,  1], dtype=np.float32),
+            low=np.array([0, 0, 0, 0, 0, 0, -1, -1, 0, -1, -1, 0], dtype=np.float32),
+            high=np.array([1, 1, 1, 1, 1, 1,  1,  1, 1,  1,  1, 1], dtype=np.float32),
             dtype=np.float32,
         )
 
@@ -208,7 +208,7 @@ class BrowserHeroEnv(gym.Env):
     def _to_obs(self, st: dict) -> np.ndarray:
         me = self._extract_me(st)
         if me is None:
-            return np.zeros((11,), dtype=np.float32)
+            return np.zeros((12,), dtype=np.float32)
 
         player_x = me["x"] / 2600
         player_y = me["y"] / 1500
@@ -233,9 +233,13 @@ class BrowserHeroEnv(gym.Env):
         else:
             bullet_rel_x = bullet_rel_y = 0.0
 
+        # Enemy count normalized (max is 20 based on spawnWave function)
+        enemy_count = st.get("enemyCount", len(st.get("enemies", [])))
+        enemy_count_norm = min(enemy_count / 20.0, 1.0)
+
         return np.array(
             [player_x, player_y, player_hp, player_ult, player_ammo, reloading,
-             enemy_rel_x, enemy_rel_y, enemy_hp, bullet_rel_x, bullet_rel_y],
+             enemy_rel_x, enemy_rel_y, enemy_hp, bullet_rel_x, bullet_rel_y, enemy_count_norm],
             dtype=np.float32,
         )
 
@@ -247,7 +251,6 @@ class BrowserHeroEnv(gym.Env):
         r += 1.0
         r += (me["hp"] / max(1, me.get("maxHp", 100))) * 2.0
         r += me.get("score", 0) * 0.1
-        # r += (me["ammo"] / max(1, me.get("maxAmmo", 50))) * 0.5
         if me["hp"] < 50: r -= 5.0
         px, py = me["x"], me["y"]
         n_close = sum(1 for e in st.get("enemies", [])
@@ -292,7 +295,11 @@ class BrowserHeroEnv(gym.Env):
         self._last_raw_state = raw
         obs = self._to_obs(raw)
         rew = self._reward(raw)
-        done = self._step_count >= self.max_episode_steps
+        
+        # Check if episode is done: max steps reached or all enemies defeated
+        enemy_count = raw.get("enemyCount", len(raw.get("enemies", [])))
+        done = self._step_count >= self.max_episode_steps or enemy_count == 0
+        
         return obs, rew, done, False, {}
 
     def _put_action(self, action):
